@@ -3,20 +3,30 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: TourVision API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: tours
+    description: Tour management
+  - name: user
+    description: User profile and limits
+  - name: leads
+    description: Buyer leads
+  - name: analytics
+    description: Analytics and stats
+  - name: flags
+    description: Angle flagging
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +34,396 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /user/profile:
+    get:
+      operationId: getUserProfile
+      tags: [user]
+      summary: Get current user profile
+      responses:
+        "200":
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+    put:
+      operationId: updateUserProfile
+      tags: [user]
+      summary: Update user profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserProfileBody"
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+
+  /user/limits:
+    get:
+      operationId: getUserLimits
+      tags: [user]
+      summary: Get user tour limits
+      responses:
+        "200":
+          description: User limits
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserLimits"
+
+  /user/onboarding:
+    post:
+      operationId: completeOnboarding
+      tags: [user]
+      summary: Complete user onboarding
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OnboardingBody"
+      responses:
+        "200":
+          description: Onboarding completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /tours:
+    get:
+      operationId: listTours
+      tags: [tours]
+      summary: List user tours
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [all, ready, processing, failed]
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [newest, oldest, confidence, views]
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of tours
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ToursListResponse"
+    post:
+      operationId: createTour
+      tags: [tours]
+      summary: Create a new tour from listing URL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTourBody"
+      responses:
+        "200":
+          description: Tour created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateTourResponse"
+        "403":
+          description: Tour limit reached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /tours/recent:
+    get:
+      operationId: getRecentTours
+      tags: [tours]
+      summary: Get recent tours (last 5) for dashboard
+      responses:
+        "200":
+          description: Recent tours
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ToursListResponse"
+
+  /tours/stats:
+    get:
+      operationId: getTourStats
+      tags: [tours]
+      summary: Get tour statistics for dashboard
+      responses:
+        "200":
+          description: Tour statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TourStats"
+
+  /tours/{tourId}:
+    get:
+      operationId: getTour
+      tags: [tours]
+      summary: Get a tour by ID (owner only)
+      parameters:
+        - name: tourId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Tour details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tour"
+        "404":
+          description: Tour not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteTour
+      tags: [tours]
+      summary: Delete a tour
+      parameters:
+        - name: tourId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /tours/{tourId}/status:
+    get:
+      operationId: getTourStatus
+      tags: [tours]
+      summary: Get tour processing status (for polling)
+      parameters:
+        - name: tourId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Tour status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TourStatus"
+
+  /tours/{tourId}/rooms:
+    get:
+      operationId: getTourRooms
+      tags: [tours]
+      summary: Get rooms for a tour
+      parameters:
+        - name: tourId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Tour rooms
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TourRoomsResponse"
+    put:
+      operationId: updateTourRoomFloors
+      tags: [tours]
+      summary: Update floor assignments for tour rooms
+      parameters:
+        - name: tourId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateRoomFloorsBody"
+      responses:
+        "200":
+          description: Rooms updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /tours/{tourId}/lead:
+    post:
+      operationId: submitBuyerLead
+      tags: [leads]
+      summary: Submit buyer lead from tour viewer (public)
+      parameters:
+        - name: tourId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BuyerLeadBody"
+      responses:
+        "200":
+          description: Lead submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /tours/{tourId}/floors:
+    put:
+      operationId: setTourFloorCount
+      tags: [tours]
+      summary: Set number of floors for a tour
+      parameters:
+        - name: tourId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetFloorCountBody"
+      responses:
+        "200":
+          description: Floor count set
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /tours/public/{shareToken}:
+    get:
+      operationId: getPublicTour
+      tags: [tours]
+      summary: Get public tour by share token (no auth required)
+      parameters:
+        - name: shareToken
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Public tour data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicTour"
+        "404":
+          description: Tour not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /leads:
+    get:
+      operationId: getLeads
+      tags: [leads]
+      summary: Get buyer leads for user's tours
+      responses:
+        "200":
+          description: Buyer leads
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadsListResponse"
+
+  /analytics/overview:
+    get:
+      operationId: getAnalyticsOverview
+      tags: [analytics]
+      summary: Get analytics overview data
+      responses:
+        "200":
+          description: Analytics data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyticsOverview"
+
+  /angles/flag:
+    post:
+      operationId: flagAngle
+      tags: [flags]
+      summary: Flag an angle as incorrect (public)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FlagAngleBody"
+      responses:
+        "200":
+          description: Flag submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /subscribe:
+    post:
+      operationId: subscribeNewsletter
+      tags: [user]
+      summary: Subscribe to newsletter (public)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewsletterSubscribeBody"
+      responses:
+        "200":
+          description: Subscribed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +434,608 @@ components:
       required:
         - status
 
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+      required:
+        - success
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+      required:
+        - error
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+        fullName:
+          type: string
+        email:
+          type: string
+        avatarUrl:
+          type: string
+          nullable: true
+        accountType:
+          type: string
+          enum: [agent, host, developer, manager, other]
+        country:
+          type: string
+          nullable: true
+        whatsappNumber:
+          type: string
+          nullable: true
+        subscriptionTier:
+          type: string
+          enum: [free, pro, unlimited]
+        subscriptionStatus:
+          type: string
+          nullable: true
+        toursThisMonth:
+          type: integer
+        totalTours:
+          type: integer
+        onboardingCompleted:
+          type: boolean
+        createdAt:
+          type: string
+      required:
+        - id
+        - fullName
+        - email
+        - accountType
+        - subscriptionTier
+        - toursThisMonth
+        - totalTours
+        - onboardingCompleted
+        - createdAt
+
+    UpdateUserProfileBody:
+      type: object
+      properties:
+        fullName:
+          type: string
+        accountType:
+          type: string
+          enum: [agent, host, developer, manager, other]
+        country:
+          type: string
+        whatsappNumber:
+          type: string
+
+    OnboardingBody:
+      type: object
+      properties:
+        accountType:
+          type: string
+          enum: [agent, host, developer, manager, other]
+        country:
+          type: string
+        whatsappNumber:
+          type: string
+      required:
+        - accountType
+
+    UserLimits:
+      type: object
+      properties:
+        tier:
+          type: string
+        toursThisMonth:
+          type: integer
+        toursLimit:
+          type: integer
+        toursRemaining:
+          type: integer
+        renewalDate:
+          type: string
+          nullable: true
+      required:
+        - tier
+        - toursThisMonth
+        - toursLimit
+        - toursRemaining
+
+    Tour:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        listingUrl:
+          type: string
+        listingTitle:
+          type: string
+          nullable: true
+        listingAddress:
+          type: string
+          nullable: true
+        listingPlatform:
+          type: string
+          nullable: true
+        listingPrice:
+          type: string
+          nullable: true
+        listingBedrooms:
+          type: integer
+          nullable: true
+        listingBathrooms:
+          type: integer
+          nullable: true
+        listingSqft:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [pending, extracting, generating, stitching, building_3d, ready, failed]
+        currentStage:
+          type: string
+          nullable: true
+        totalPhotosExtracted:
+          type: integer
+        photosUsed:
+          type: integer
+        roomsDetected:
+          type: integer
+        floorCount:
+          type: integer
+          nullable: true
+        confidenceScore:
+          type: number
+        realAngles:
+          type: integer
+        aiHighAngles:
+          type: integer
+        aiLowAngles:
+          type: integer
+        marbleWorldIds:
+          type: object
+          nullable: true
+        tourEmbedUrl:
+          type: string
+          nullable: true
+        shareToken:
+          type: string
+          nullable: true
+        isWatermarked:
+          type: boolean
+        thumbnailUrl:
+          type: string
+          nullable: true
+        viewCount:
+          type: integer
+        errorMessage:
+          type: string
+          nullable: true
+        processingStartedAt:
+          type: string
+          nullable: true
+        processingCompletedAt:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+      required:
+        - id
+        - userId
+        - listingUrl
+        - status
+        - totalPhotosExtracted
+        - photosUsed
+        - roomsDetected
+        - confidenceScore
+        - realAngles
+        - aiHighAngles
+        - aiLowAngles
+        - isWatermarked
+        - viewCount
+        - createdAt
+
+    TourRoom:
+      type: object
+      properties:
+        id:
+          type: string
+        tourId:
+          type: string
+        roomLabel:
+          type: string
+        floorNumber:
+          type: integer
+          nullable: true
+        qualityScore:
+          type: integer
+        isSelected:
+          type: boolean
+        isBestForRoom:
+          type: boolean
+        confidenceScore:
+          type: number
+          nullable: true
+        marbleWorldId:
+          type: string
+          nullable: true
+        marbleEmbedUrl:
+          type: string
+          nullable: true
+        thumbnailUrl:
+          type: string
+          nullable: true
+        isAiGenerated:
+          type: boolean
+        createdAt:
+          type: string
+      required:
+        - id
+        - tourId
+        - roomLabel
+        - qualityScore
+        - isSelected
+        - isBestForRoom
+        - isAiGenerated
+        - createdAt
+
+    TourRoomsResponse:
+      type: object
+      properties:
+        rooms:
+          type: array
+          items:
+            $ref: "#/components/schemas/TourRoom"
+        floorCount:
+          type: integer
+          nullable: true
+      required:
+        - rooms
+
+    UpdateRoomFloorsBody:
+      type: object
+      properties:
+        assignments:
+          type: array
+          items:
+            type: object
+            properties:
+              roomId:
+                type: string
+              floorNumber:
+                type: integer
+            required:
+              - roomId
+              - floorNumber
+      required:
+        - assignments
+
+    SetFloorCountBody:
+      type: object
+      properties:
+        floorCount:
+          type: integer
+      required:
+        - floorCount
+
+    ToursListResponse:
+      type: object
+      properties:
+        tours:
+          type: array
+          items:
+            $ref: "#/components/schemas/Tour"
+        total:
+          type: integer
+        page:
+          type: integer
+        totalPages:
+          type: integer
+      required:
+        - tours
+        - total
+
+    CreateTourBody:
+      type: object
+      properties:
+        listingUrl:
+          type: string
+        floorCount:
+          type: integer
+      required:
+        - listingUrl
+
+    CreateTourResponse:
+      type: object
+      properties:
+        tourId:
+          type: string
+        shareToken:
+          type: string
+      required:
+        - tourId
+        - shareToken
+
+    TourStatus:
+      type: object
+      properties:
+        status:
+          type: string
+        currentStage:
+          type: string
+          nullable: true
+        roomsCompleted:
+          type: integer
+        roomsTotal:
+          type: integer
+        estimatedMinutes:
+          type: integer
+        confidenceScore:
+          type: number
+        errorMessage:
+          type: string
+          nullable: true
+      required:
+        - status
+        - roomsCompleted
+        - roomsTotal
+        - estimatedMinutes
+        - confidenceScore
+
+    TourStats:
+      type: object
+      properties:
+        toursThisMonth:
+          type: integer
+        toursLimit:
+          type: integer
+        avgProcessingMinutes:
+          type: number
+        totalViewsThisMonth:
+          type: integer
+        totalToursAllTime:
+          type: integer
+      required:
+        - toursThisMonth
+        - toursLimit
+        - avgProcessingMinutes
+        - totalViewsThisMonth
+        - totalToursAllTime
+
+    PublicTour:
+      type: object
+      properties:
+        id:
+          type: string
+        shareToken:
+          type: string
+        listingAddress:
+          type: string
+          nullable: true
+        listingPlatform:
+          type: string
+          nullable: true
+        listingPrice:
+          type: string
+          nullable: true
+        listingBedrooms:
+          type: integer
+          nullable: true
+        listingBathrooms:
+          type: integer
+          nullable: true
+        listingSqft:
+          type: string
+          nullable: true
+        marbleWorldIds:
+          type: object
+          nullable: true
+        rooms:
+          type: array
+          items:
+            $ref: "#/components/schemas/TourRoom"
+        confidenceScore:
+          type: number
+        realAngles:
+          type: integer
+        aiHighAngles:
+          type: integer
+        aiLowAngles:
+          type: integer
+        isWatermarked:
+          type: boolean
+        agentName:
+          type: string
+          nullable: true
+        agentLogo:
+          type: string
+          nullable: true
+        thumbnailUrl:
+          type: string
+          nullable: true
+      required:
+        - id
+        - shareToken
+        - confidenceScore
+        - realAngles
+        - aiHighAngles
+        - aiLowAngles
+        - isWatermarked
+        - rooms
+
+    BuyerLeadBody:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        message:
+          type: string
+      required:
+        - name
+        - email
+
+    LeadsListResponse:
+      type: object
+      properties:
+        leads:
+          type: array
+          items:
+            $ref: "#/components/schemas/BuyerLead"
+        total:
+          type: integer
+      required:
+        - leads
+        - total
+
+    BuyerLead:
+      type: object
+      properties:
+        id:
+          type: string
+        tourId:
+          type: string
+        buyerName:
+          type: string
+        buyerEmail:
+          type: string
+        buyerPhone:
+          type: string
+          nullable: true
+        message:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [new, contacted, converted]
+        tourAddress:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+      required:
+        - id
+        - tourId
+        - buyerName
+        - buyerEmail
+        - status
+        - createdAt
+
+    AnalyticsOverview:
+      type: object
+      properties:
+        toursOverTime:
+          type: array
+          items:
+            type: object
+            properties:
+              date:
+                type: string
+              count:
+                type: integer
+            required:
+              - date
+              - count
+        viewsByTour:
+          type: array
+          items:
+            type: object
+            properties:
+              tourId:
+                type: string
+              address:
+                type: string
+              views:
+                type: integer
+            required:
+              - tourId
+              - address
+              - views
+        viewsByCountry:
+          type: array
+          items:
+            type: object
+            properties:
+              country:
+                type: string
+              views:
+                type: integer
+              percentage:
+                type: number
+            required:
+              - country
+              - views
+              - percentage
+        processingTrend:
+          type: array
+          items:
+            type: object
+            properties:
+              date:
+                type: string
+              avgMinutes:
+                type: number
+            required:
+              - date
+              - avgMinutes
+        tourPerformance:
+          type: array
+          items:
+            type: object
+            properties:
+              tourId:
+                type: string
+              address:
+                type: string
+              views:
+                type: integer
+              countries:
+                type: integer
+              avgTimeInTour:
+                type: number
+              leads:
+                type: integer
+            required:
+              - tourId
+              - address
+              - views
+              - countries
+              - avgTimeInTour
+              - leads
+      required:
+        - toursOverTime
+        - viewsByTour
+        - viewsByCountry
+        - processingTrend
+        - tourPerformance
+
+    FlagAngleBody:
+      type: object
+      properties:
+        tourId:
+          type: string
+        angleId:
+          type: string
+        reason:
+          type: string
+      required:
+        - tourId
+        - angleId
+
+    NewsletterSubscribeBody:
+      type: object
+      properties:
+        email:
+          type: string
+      required:
+        - email

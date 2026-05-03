@@ -1,0 +1,1516 @@
+Build me a full-stack SaaS web application called "TourVision".
+
+TourVision is an AI-powered real estate tool that automatically 
+converts any property listing URL (Zillow, Airbnb, Bayut, 
+Property Finder) into a fully navigable, photorealistic 3D 
+virtual tour — powered by World Labs Marble API. 
+No video needed. No special equipment. Just a link.
+
+The agent pastes a listing URL. TourVision scrapes all photos, 
+identifies each room using AI, sends the best photo of each 
+room to World Labs Marble API which generates a navigable 
+3D world per room, stitches all rooms into one seamless 
+property tour, and returns a single shareable link the agent 
+sends to buyers. Buyers open the link on any device, 
+no download needed, and walk through the property in 3D.
+
+---
+
+TECH STACK — use exactly these, no substitutions:
+- Framework: Next.js 14 with App Router
+- Styling: Tailwind CSS + shadcn/ui components
+- Animations: Framer Motion throughout
+- Database: Supabase (PostgreSQL)
+- Authentication: Supabase Auth 
+  (email/password + Google OAuth)
+- Payments: Stripe 
+  (subscriptions + customer portal + webhooks)
+- Background jobs: Inngest 
+  (all async processing — never block the UI)
+- File storage: Cloudflare R2
+- Email: Resend
+- SMS/WhatsApp: Twilio
+- Deployment: Vercel
+- All environment variables stored in .env.local
+
+---
+
+DESIGN SYSTEM — apply everywhere, no exceptions:
+
+Colors:
+- Background: #080808
+- Surface/cards: #111111
+- Elevated surface: #161616
+- Borders: #222222
+- Primary accent: #00FF88 (electric green)
+- Secondary accent: #00CCFF (cyan blue)
+- Destructive: #FF4444
+- Text primary: #F0F0F0
+- Text secondary: #888888
+- Text muted: #444444
+
+Typography:
+- Headings: Syne (Google Font), weight 800
+- Body: Inter (Google Font), weight 400/500
+- Mono/labels: Space Mono
+
+Design rules:
+- Dark theme only, no light mode
+- Cards have 1px border #222222, 
+  border-radius 12px, background #111111
+- Buttons: primary = #00FF88 background, 
+  #080808 text, bold, border-radius 8px
+- Secondary buttons: transparent background, 
+  #00FF88 border, #00FF88 text
+- All hover states have smooth 200ms transition
+- Subtle green glow on primary interactive elements:
+  box-shadow: 0 0 20px rgba(0,255,136,0.15)
+- Input fields: background #161616, 
+  border #222222, focus border #00FF88
+- Loading skeletons everywhere — 
+  never show empty white space
+- Framer Motion: fade-up animation on all 
+  page sections on mount (y: 20 to 0, 
+  opacity 0 to 1, duration 0.4s)
+- Stagger children animations in lists 
+  (0.1s delay between items)
+
+---
+
+PAGES — build every single one:
+
+═══════════════════════════════════════
+PAGE 1: LANDING PAGE (public)
+Route: /
+═══════════════════════════════════════
+
+NAVBAR:
+- Left: TourVision logo (green dot + wordmark)
+- Right: "How it Works" link, "Pricing" link, 
+  "Sign In" button (outline), 
+  "Start Free" button (primary green)
+- Sticky, backdrop blur on scroll, 
+  border bottom appears on scroll
+
+HERO SECTION:
+- Animated badge above headline: 
+  "✦ Powered by World Labs Marble AI"
+  (pill shaped, green border, subtle pulse animation)
+- Main headline (huge, Syne 800):
+  "Any Listing. Any Photos."
+  "Instant 3D Walkthrough."
+- Subheadline:
+  "Paste a Zillow, Airbnb or Bayut link. 
+  TourVision's AI generates a photorealistic 
+  navigable 3D tour from the listing photos — 
+  automatically. No video. No equipment. 
+  One link to share with buyers."
+- Two CTA buttons side by side:
+  Primary: "Generate Your First Tour Free →"
+  Secondary: "Watch 60s Demo ▶"
+  (demo button opens a modal with 
+  a placeholder video embed)
+- Below buttons: 
+  "✓ No credit card required  
+   ✓ First tour completely free  
+   ✓ Ready in under 30 minutes"
+- Hero visual: dark mockup of the app dashboard 
+  showing a 3D property tour, 
+  with a subtle green glow behind it
+- Floating stats cards around the mockup 
+  (animated, floating up and down):
+  Card 1: "🏠 2,847 Tours Generated"
+  Card 2: "⚡ 28 min avg processing"
+  Card 3: "🌍 MENA's First AI Tour Tool"
+- Animated background: 
+  subtle dark grid with slow green 
+  particle drift
+
+LOGO BAR:
+- "Trusted by agents across MENA" label
+- Row of platform logos: 
+  Zillow, Airbnb, Bayut, Property Finder, 
+  Rightmove — all greyscale
+- Infinite horizontal scroll animation
+
+HOW IT WORKS SECTION:
+- Section label: "THE PROCESS"
+- Headline: "Three Steps. One Link. 
+  Sold Faster."
+- Three large step cards in a row:
+  
+  Step 1 — "Paste Your Listing URL"
+  Icon: link icon in green circle
+  Description: "Copy any property listing URL 
+  from Zillow, Airbnb, Bayut, or Property Finder. 
+  TourVision automatically extracts every photo 
+  from the listing — no manual uploads."
+  
+  Step 2 — "AI Builds Your 3D Tour"
+  Icon: cube icon in green circle  
+  Description: "Our AI identifies each room, 
+  selects the best photo per space, and sends 
+  it to World Labs Marble — the world's most 
+  advanced spatial AI. Each room becomes a 
+  navigable 3D environment in minutes."
+  
+  Step 3 — "Share One Link. Close More Deals."
+  Icon: share icon in green circle
+  Description: "Buyers receive one link. 
+  They open it on any phone, tablet, or laptop — 
+  no download needed — and walk through the 
+  property in full 3D before ever visiting."
+
+- Between each step: animated arrow 
+  pointing right (green, pulsing)
+- Below the 3 steps: a full-width dark card 
+  showing the confidence indicator feature:
+  "🤖 AI Confidence Indicator — 
+  Green angles are confirmed real photos. 
+  Blue angles are AI-estimated. 
+  Sellers can verify any angle with 
+  one WhatsApp message."
+
+FEATURES SECTION:
+- Section label: "FEATURES"
+- Headline: "Everything an Agent Needs. 
+  Nothing They Don't."
+- 6 feature cards in 2x3 grid:
+
+  Card 1: "Auto Photo Extraction"
+  Icon: camera
+  "We scrape every photo from any listing URL. 
+  Zillow, Airbnb, Bayut, Property Finder, 
+  and more. Zero manual work."
+
+  Card 2: "World Labs Marble 3D"
+  Icon: cube  
+  "Powered by the world's most advanced 
+  spatial AI. One photo per room becomes 
+  a fully navigable 3D environment."
+
+  Card 3: "AI Confidence Indicator"
+  Icon: shield check
+  "Every angle is labeled — real photo 
+  or AI-estimated. Buyers know exactly 
+  what they're seeing. Trust builds deals."
+
+  Card 4: "Seller Verification Flow"
+  Icon: check circle
+  "Buyers flag uncertain angles. 
+  Sellers get a WhatsApp message asking 
+  them to confirm. Tours improve automatically."
+
+  Card 5: "Instant Shareable Link"
+  Icon: link
+  "One link. Works on iPhone, Android, 
+  laptop, tablet. No app download. 
+  No login required for buyers."
+
+  Card 6: "Tour Analytics"
+  Icon: bar chart
+  "See exactly how many buyers opened 
+  your tour, from which country, 
+  on which device. Know your hottest listings."
+
+SOCIAL PROOF SECTION:
+- Headline: "Agents Across MENA Are 
+  Closing Faster"
+- 3 testimonial cards:
+
+  Card 1:
+  Avatar: placeholder circle, initials "KA"
+  Name: "Karim Aziz"
+  Role: "Real Estate Agent, Dubai"
+  Stars: ★★★★★
+  Quote: "I sent a 3D tour link to a client 
+  in London. They made an offer the same day 
+  without visiting. TourVision paid for itself 
+  on the first deal."
+
+  Card 2:
+  Avatar: placeholder circle, initials "RM"
+  Name: "Rania Mansour"  
+  Role: "Airbnb Superhost, Beirut"
+  Stars: ★★★★★
+  Quote: "My booking rate went up 40% 
+  after I added 3D tours to my listings. 
+  Guests know exactly what they're 
+  getting. Zero bad reviews since."
+
+  Card 3:
+  Avatar: placeholder circle, initials "FH"
+  Name: "Faris Al-Hamdan"
+  Role: "Property Developer, Riyadh"
+  Stars: ★★★★★
+  Quote: "We sold 8 off-plan units to 
+  international buyers using TourVision tours. 
+  They bought properties they'd never 
+  physically visited."
+
+PRICING SECTION:
+- Section label: "PRICING"  
+- Headline: "One Tour Pays For The 
+  Whole Month"
+- Subheadline: "Every plan includes real 
+  navigable 3D environments — 
+  not just video walkthroughs."
+- 3 pricing cards side by side. 
+  PRO card is larger, has green border glow, 
+  "Most Popular" badge:
+
+  FREE — $0/month:
+  - 1 tour per month
+  - Draft quality 3D environment
+  - TourVision watermark
+  - Shareable link (expires in 14 days)
+  - AI confidence indicator
+  Button: "Start Free" (outline)
+
+  PRO — $149/month:
+  [MOST POPULAR badge]
+  - 15 tours per month
+  - Full quality 3D (Marble 1.1)
+  - No watermark
+  - Shareable links never expire
+  - AI confidence indicator
+  - Seller verification flow (WhatsApp)
+  - Tour analytics dashboard
+  - Priority processing queue
+  - Email support
+  Button: "Start Free Trial" (primary green)
+
+  UNLIMITED — $299/month:
+  - 30 tours per month
+  - Everything in Pro
+  - White-label (your agency branding)
+  - API access
+  - Custom domain for tours
+  - Dedicated support
+  - Early access to new features
+  Button: "Get Started" (outline)
+
+- Below cards: 
+  "All plans include a 7-day free trial. 
+   Cancel anytime. No contracts."
+
+FAQ SECTION:
+- 6 accordion items:
+  Q: "What listing platforms do you support?"
+  A: "Currently Zillow, Airbnb, Bayut, 
+  Property Finder, and Rightmove. 
+  We're adding more platforms monthly."
+
+  Q: "How long does a tour take to generate?"
+  A: "Most tours are ready in 20-35 minutes 
+  depending on the number of rooms. 
+  You'll get an email and WhatsApp 
+  notification the moment yours is ready."
+
+  Q: "What if the listing doesn't have 
+  enough photos?"
+  A: "We'll tell you exactly which rooms 
+  need more photos and let you upload 
+  additional images directly. 
+  The more photos, the better the tour."
+
+  Q: "Do buyers need to download an app?"
+  A: "Never. Tours open in any browser 
+  on any device. One tap on the link 
+  and they're inside the property."
+
+  Q: "How accurate are the 3D environments?"
+  A: "Rooms with 3+ photos produce 
+  near-perfect results. Our AI confidence 
+  indicator clearly marks any angles that 
+  were AI-estimated vs confirmed real photos, 
+  so buyers always know what they're seeing."
+
+  Q: "Can I use this for off-plan 
+  or unfurnished properties?"
+  A: "Yes. For unfurnished properties the 
+  3D environment shows the true space — 
+  buyers can actually judge room size 
+  better without furniture in the way."
+
+FOOTER:
+- Left: TourVision logo + tagline 
+  "The future of property viewing. Built for MENA."
+- Middle columns: 
+  Product (Features, Pricing, Demo, API)
+  Company (About, Blog, Careers, Press)
+  Support (Help Center, Contact, Status)
+- Right: "Join 2,800+ agents" 
+  + email input + subscribe button
+- Bottom bar: 
+  "© 2026 TourVision. All rights reserved." 
+  + Privacy Policy + Terms of Service
+- Social icons: Instagram, LinkedIn, Twitter/X
+
+═══════════════════════════════════════
+PAGE 2: AUTH PAGES
+Routes: /login  /signup  /forgot-password
+═══════════════════════════════════════
+
+LAYOUT:
+- Split screen — left side 60% shows 
+  a rotating 3D tour mockup with 
+  floating feature callouts
+- Right side 40% has the auth form
+- Mobile: full screen form only
+
+SIGNUP FORM:
+- Headline: "Start for free. 
+  No credit card required."
+- Google OAuth button (full width, 
+  white background, Google logo)
+- Divider: "or continue with email"
+- Fields: Full Name, Email, Password, 
+  Confirm Password
+- Checkbox: "I agree to Terms of Service 
+  and Privacy Policy" (required)
+- Primary button: "Create Account →"
+- Below: "Already have an account? Sign in"
+- After successful signup → 
+  redirect to /onboarding
+
+LOGIN FORM:
+- Headline: "Welcome back."
+- Google OAuth button
+- Divider
+- Fields: Email, Password
+- "Forgot password?" link (right aligned)
+- Primary button: "Sign In →"
+- Below: "Don't have an account? 
+  Start free →"
+- After login → redirect to /dashboard
+
+ONBOARDING (3 steps, shown once):
+- Progress bar at top showing step 1/3
+
+  Step 1 — "What best describes you?"
+  Large radio cards with icons:
+  🏢 Real Estate Agent
+  🏠 Airbnb / Short-Term Rental Host
+  🏗️ Property Developer
+  🔑 Property Manager
+  👤 Other
+  Button: "Continue →"
+
+  Step 2 — "Where are you based?"
+  Dropdown: country selector
+  (prioritize MENA countries at top:
+  Lebanon, UAE, Saudi Arabia, Egypt, 
+  Qatar, Kuwait, Bahrain, Jordan, Morocco)
+  Optional: Phone number field 
+  (for WhatsApp notifications)
+  Button: "Continue →"
+
+  Step 3 — "Generate your first tour free"
+  Headline: "You're all set. 
+  Let's make your first 3D tour."
+  Large URL input field
+  Placeholder: "Paste any listing URL 
+  to get started..."
+  Button: "Generate My First Tour →"
+  Small link: "Skip for now → 
+  go to dashboard"
+  
+  Save all onboarding answers to 
+  user profile in Supabase
+
+═══════════════════════════════════════
+PAGE 3: DASHBOARD
+Route: /dashboard
+═══════════════════════════════════════
+
+LAYOUT:
+- Fixed left sidebar (240px wide) on desktop
+- Top navbar on mobile with hamburger menu
+- Main content area fills remaining space
+- Background: #080808
+
+SIDEBAR:
+- Top: TourVision logo
+- User avatar + name + plan badge 
+  (FREE / PRO / UNLIMITED)
+- Nav items with icons:
+  🏠 Dashboard (active state: green text 
+     + left border accent)
+  🎯 New Tour
+  📁 My Tours
+  📊 Analytics
+  ⚙️ Settings
+  💳 Billing
+  ❓ Help
+- Bottom of sidebar:
+  Tours remaining this month:
+  Progress bar [████░░░░░░] 4/15
+  "Upgrade for more →" 
+  (shown only if not on Unlimited)
+
+TOP BAR (main content area):
+- Left: Page title
+- Right: notification bell icon + 
+  "New Tour" primary button always visible
+
+DASHBOARD HOME CONTENT:
+
+Welcome banner:
+- "Good morning, [First Name] 👋"
+- Subtext: "You have X tours remaining 
+  this month."
+- If on free plan: 
+  soft green banner: 
+  "🚀 Upgrade to Pro — 
+  your free tour expires in 14 days. 
+  Unlock 15 tours/month for $149."
+  Button: "Upgrade Now →"
+
+Stats row (4 cards):
+Each card: icon, number (large, green), label
+
+Card 1: 🏠 Tours This Month / [N] / 
+"of 15 used"
+Card 2: ⏱️ Avg Processing / [N min] / 
+"per property"
+Card 3: 👁️ Total Tour Views / [N] / 
+"by buyers this month"
+Card 4: ✓ Tours All Time / [N] / 
+"properties toured"
+
+Recent Tours (last 5):
+- Section header: "Recent Tours" + 
+  "View all →" link
+- Tour cards (horizontal list):
+  Each card shows:
+  → Property thumbnail (first scraped photo)
+  → Address/title from listing
+  → Status badge:
+     "Processing" — orange pulsing dot
+     "Ready" — green dot  
+     "Failed" — red dot
+     "Draft" — grey dot
+  → Rooms detected: "6 rooms"
+  → Confidence score: "82% verified" 
+    (green if >70%, orange if 40-70%, 
+    red if <40%)
+  → Date created: "2 hours ago"
+  → Three icon buttons: 
+    👁️ View Tour
+    🔗 Copy Link  
+    🗑️ Delete
+
+Quick Generate widget:
+- Card with headline: 
+  "Generate a New Tour"
+- URL input + "Generate →" button
+- "Or drag and drop photos directly" 
+  below input
+- Note: "Average processing time: 28 minutes. 
+  We'll email you when it's ready."
+
+═══════════════════════════════════════
+PAGE 4: NEW TOUR FLOW
+Route: /dashboard/new-tour
+═══════════════════════════════════════
+
+This is the most important page. 
+Build it as a multi-step flow.
+Each step is a smooth animated 
+transition (slide left, Framer Motion).
+
+STEP 1 — URL INPUT:
+
+Center of page:
+- Large headline: "Paste Your Listing URL"
+- Subheadline: "We support Zillow, Airbnb, 
+  Bayut, Property Finder, Rightmove 
+  and most listing platforms."
+- Large input field (full width, tall, 
+  prominent green focus ring)
+- Placeholder: 
+  "https://www.zillow.com/homedetails/..."
+- Below input: platform logos as 
+  small icons (Zillow, Airbnb, Bayut etc)
+- Primary button: 
+  "Extract Photos →" (full width)
+- On click: 
+  button shows spinner + 
+  "Extracting photos..." text
+  Page shows animated progress:
+  "🔍 Connecting to listing..."
+  "📸 Finding photos..."
+  "🤖 Analyzing rooms..."
+  Each line appears sequentially 
+  with a checkmark when done
+
+STEP 2 — PHOTO REVIEW:
+
+After extraction completes, 
+animate transition to photo review.
+
+Banner at top:
+"✓ [N] photos extracted from 
+[listing address] across [N] rooms"
+
+If fewer than 3 photos per room, 
+show warning banner:
+"⚠️ Some rooms have fewer than 3 photos. 
+Your tour may have lower quality in 
+those areas. You can upload more below."
+
+Room sections (grouped by room):
+Each room is a collapsible section:
+- Room header: 
+  "Living Room" (AI detected label) 
+  + photo count "3 photos" 
+  + quality bar (green/orange/red)
+- Photo grid inside: 
+  Each photo shows:
+  → Thumbnail
+  → Quality score badge 
+    (⭐ 1-5, based on brightness/sharpness)
+  → Checkbox (checked by default)
+  → Click to deselect/select
+  → "Best for 3D" badge on 
+    the highest quality photo in each room 
+    (this is the one sent to Marble API)
+
+"Upload Additional Photos" dropzone:
+- Dashed border card below all rooms
+- "Drag & drop more photos here, 
+  or click to browse"
+- Accepts: JPG, PNG, WEBP, HEIC
+- Uploaded photos get AI room label 
+  assigned automatically
+
+Bottom action bar (sticky):
+- Left: "[N] photos selected across 
+  [N] rooms"
+- Right: 
+  "Back" (outline) + 
+  "Generate 3D Tour →" (primary green)
+
+STEP 3 — PROCESSING SCREEN:
+
+Full page experience. 
+Never a plain spinner.
+
+Top: 
+"Building Your 3D Tour"
+Property address shown below
+
+5-stage progress tracker 
+(vertical on mobile, horizontal on desktop):
+
+Stage 1: "Analyzing rooms"
+Stage 2: "Generating 3D worlds"  
+Stage 3: "Building property tour"
+Stage 4: "Applying confidence scoring"
+Stage 5: "Creating your share link"
+
+Each stage:
+- Waiting: grey circle with number
+- Active: green pulsing circle + 
+  animated progress bar below
+- Complete: green checkmark ✓
+
+Currently active stage shows detail:
+"Generating 3D world for Living Room... 
+(3 of 6 rooms complete)"
+
+Rotating fun messages every 8 seconds:
+"🏠 Teaching the AI to read floor plans..."
+"🌍 Your buyers in London are 
+going to love this..."
+"📐 Calculating exact ceiling heights..."
+"✨ Rendering photorealistic surfaces..."
+"🔑 Almost ready to hand over the keys..."
+
+Estimated time remaining:
+Large countdown: "~24 minutes remaining"
+Updates in real time via polling
+
+"We'll email you when it's ready" note
++ "← Back to dashboard" link 
+(tour continues processing in background)
+
+STEP 4 — TOUR READY:
+
+Success animation: 
+green particles burst from center
+
+Large checkmark icon (animated)
+"Your 3D Tour is Ready! 🎉"
+Property address below
+
+Tour preview card:
+- Thumbnail of the property
+- "Click to preview" overlay
+- Opens tour in a modal lightbox
+
+Confidence breakdown section:
+Circular progress chart + breakdown:
+
+🟢 Real Photos: [N] angles
+🔵 AI Estimated (High): [N] angles  
+⚪ AI Estimated (Low): [N] angles
+Overall: "[N]% Verified" 
+(large number, color coded)
+
+Share section:
+- Generated link displayed:
+  "tourvision.app/tour/[unique-id]"
+- Two buttons:
+  "📋 Copy Link" → copies + shows toast 
+  "↗️ Open Tour" → opens in new tab
+
+Seller verification card 
+(shown if any low-confidence angles):
+"Some angles are AI-estimated. 
+Request the seller to verify them 
+via WhatsApp — takes 30 seconds."
+Input: "Seller's WhatsApp number"
+Button: "Send Verification Request →"
+(creates verification_request in DB, 
+sends Twilio WhatsApp message)
+
+"← Generate Another Tour" button
+
+═══════════════════════════════════════
+PAGE 5: MY TOURS
+Route: /dashboard/tours
+═══════════════════════════════════════
+
+Header:
+- "My Tours" title
+- Right: search input + filter dropdown
+
+Filter tabs (horizontal):
+All | Ready | Processing | Failed
+
+Search: 
+- Real-time filter by address or date
+
+Sort dropdown:
+Newest First / Oldest First / 
+Highest Confidence / Most Viewed
+
+Tours grid (2 columns desktop, 
+1 column mobile):
+Each tour card (same design as dashboard 
+but larger, more detail):
+- Property hero image (full width top)
+- Status badge (top right corner overlay)
+- Body:
+  Address + platform icon
+  Rooms: "6 rooms detected"
+  Confidence: progress bar + percentage
+  Views: "👁️ 14 buyer views"
+  Created: "3 days ago"
+- Footer: 3 buttons:
+  "View Tour" | "Copy Link" | "..." menu
+  "..." menu: Rename, Download report, Delete
+
+Empty state 
+(when no tours yet):
+Centered illustration (simple SVG house)
+"No tours yet."
+"Generate your first 3D tour 
+and share it with buyers in minutes."
+Button: "Generate Your First Tour →"
+
+Pagination at bottom:
+Show 12 per page
+
+═══════════════════════════════════════
+PAGE 6: ANALYTICS
+Route: /dashboard/analytics
+═══════════════════════════════════════
+
+Stats overview row (same 4 cards 
+as dashboard)
+
+Chart 1 — Tours Generated Over Time:
+Line chart, last 30 days, green line
+X axis: dates, Y axis: tour count
+
+Chart 2 — Buyer Views Per Tour:
+Bar chart, top 10 tours by views
+Horizontal bars, green
+
+Chart 3 — Views By Country:
+Simple table:
+Country | Views | % of total
+Lebanon | 142 | 34%
+UAE | 98 | 23%
+Saudi Arabia | 76 | 18%
+...
+
+Chart 4 — Processing Time Trend:
+Line chart showing avg processing 
+time per day (should trend down 
+as infrastructure improves)
+
+Tour Performance Table:
+Columns: Tour | Views | Countries | 
+Avg Time In Tour | Conversion 
+(buyer requested visit)
+Sortable columns
+Clicking a row opens that tour's 
+individual analytics
+
+═══════════════════════════════════════
+PAGE 7: TOUR VIEWER (PUBLIC)
+Route: /tour/[unique-id]
+═══════════════════════════════════════
+
+This page is fully public — 
+no login required.
+This is what BUYERS see when 
+an agent shares the link.
+
+Full screen layout. 
+No sidebar. No dashboard chrome.
+
+VIEWER:
+- Full screen 3D embed 
+  (World Labs Marble iframe/embed code)
+- The navigable 3D environment 
+  fills the entire screen
+
+FLOATING TOP BAR 
+(semi-transparent, blur backdrop):
+Left side:
+- Small TourVision logo 
+  (watermark on free tier, 
+  agency logo on white-label tier)
+- Property address
+
+Right side:
+- "📋 Share" button → copies link
+- "📅 Request a Visit" button 
+  (primary green — most important CTA)
+  Clicking opens a modal:
+  "Interested in visiting this property?"
+  Fields: Name, Email, Phone
+  Button: "Send Request →"
+  (saves lead to DB, 
+  emails the agent instantly,
+  agent sees new lead in dashboard)
+
+FLOATING BOTTOM PANEL 
+(collapsible, slides up from bottom):
+Collapsed state: 
+small handle bar + "Rooms & Details"
+
+Expanded state shows:
+
+Room Navigation:
+Horizontal scrollable chips:
+"Living Room" | "Kitchen" | 
+"Master Bedroom" | "Bathroom" | 
+"Bedroom 2" | "Balcony"
+Tapping a chip jumps to that 
+room in the 3D viewer
+
+Confidence Toggle:
+Switch: "Show AI Confidence Layer"
+When ON: overlays colored tints 
+on the 3D viewer:
+🟢 Green tint = confirmed real photo
+🔵 Blue tint = AI estimated, high confidence
+🟠 Orange tint = AI estimated, 
+   needs verification
+Each tinted zone has a small badge 
+with the label
+
+"Flag This Angle" button:
+Appears when confidence toggle is ON
+Buyer can tap any zone and flag it:
+"This angle looks wrong"
+Submits to angle_flags table
+If 3+ flags on same angle: 
+agent gets notified in dashboard
+
+Property Details Panel:
+Shows scraped data:
+- Bedrooms, bathrooms, sqft
+- Price
+- Listing platform link 
+  "View original listing →"
+
+Mobile optimization:
+- Touch to look around in 3D viewer
+- Pinch to zoom
+- Bottom panel is a bottom sheet 
+  (swipe up to expand)
+- "Request a Visit" button always 
+  pinned at bottom on mobile
+
+═══════════════════════════════════════
+PAGE 8: SETTINGS
+Route: /dashboard/settings
+═══════════════════════════════════════
+
+Tabs: Profile | Notifications | 
+Branding | API | Security
+
+PROFILE TAB:
+- Avatar upload (circle, click to change)
+- Fields: Full Name, Email, 
+  Account Type dropdown, Country, 
+  WhatsApp number
+- "Save Changes" button
+
+NOTIFICATIONS TAB:
+Toggles (all ON by default):
+- Email when tour is ready
+- Email for weekly summary
+- WhatsApp when tour is ready
+- Email for new buyer lead
+- Email for billing receipts
+
+BRANDING TAB 
+(Starter + Pro only, locked with 
+upgrade prompt on Free):
+- Upload agency logo
+- Primary color picker
+- Preview card: 
+  shows how their branded 
+  share link header looks
+- "Your tours will show your 
+  agency branding instead of 
+  TourVision branding"
+
+CUSTOM DOMAIN TAB 
+(Unlimited only):
+- Input: "tours.youragency.com"
+- DNS instructions shown after input
+- Status: Pending / Connected
+
+API TAB 
+(Unlimited only):
+- API key displayed (masked)
+- Copy button
+- "Regenerate Key" button 
+  (with confirmation modal)
+- Usage this month: 
+  [N] API calls
+- Link: "API Documentation →"
+
+SECURITY TAB:
+- Change password form
+- "Sign out all other devices" button
+- Delete account (danger zone, 
+  red section at bottom, 
+  requires typing "DELETE" to confirm)
+
+═══════════════════════════════════════
+PAGE 9: BILLING
+Route: /dashboard/billing
+═══════════════════════════════════════
+
+Current Plan Card:
+- Plan name + price
+- Status badge: Active (green)
+- Renewal date: "Renews June 3, 2026"
+- Features list (checkmarks)
+- Usage bar: "8 of 15 tours used 
+  this month"
+- Button: 
+  If on Free: "Upgrade to Pro →"
+  If on paid: "Manage Subscription →"
+  (opens Stripe Customer Portal)
+
+Plan Comparison:
+Same 3 columns as landing page pricing
+Current plan highlighted with 
+"Current Plan" badge
+
+Billing History:
+Table: Date | Plan | Amount | 
+Status | Invoice
+Each row has "Download PDF" link
+Pulls from Stripe API
+
+Payment Method:
+- Shows card: "Visa ending in 4242"
+- Expiry date
+- "Update Payment Method →" 
+  (opens Stripe portal)
+
+═══════════════════════════════════════
+DATABASE SCHEMA — create all tables:
+═══════════════════════════════════════
+
+TABLE: profiles
+(extends Supabase auth.users)
+- id uuid PK references auth.users
+- full_name text
+- avatar_url text
+- account_type text 
+  (agent/host/developer/manager/other)
+- country text
+- whatsapp_number text
+- stripe_customer_id text
+- stripe_subscription_id text  
+- subscription_tier text 
+  (free/pro/unlimited) default 'free'
+- subscription_status text 
+  (active/cancelled/past_due/trialing)
+- tours_this_month integer default 0
+- total_tours integer default 0
+- onboarding_completed boolean default false
+- created_at timestamptz default now()
+- updated_at timestamptz default now()
+
+TABLE: tours
+- id uuid PK default gen_random_uuid()
+- user_id uuid FK → profiles.id
+- listing_url text NOT NULL
+- listing_title text
+- listing_address text
+- listing_platform text 
+  (zillow/airbnb/bayut/property_finder/other)
+- listing_price text
+- listing_bedrooms integer
+- listing_bathrooms integer
+- listing_sqft text
+- status text default 'pending'
+  (pending/extracting/generating/
+  stitching/building_3d/ready/failed)
+- current_stage text
+- total_photos_extracted integer default 0
+- photos_used integer default 0
+- rooms_detected integer default 0
+- confidence_score float default 0
+- real_angles integer default 0
+- ai_high_angles integer default 0
+- ai_low_angles integer default 0
+- marble_world_ids jsonb 
+  (array of World Labs world IDs per room)
+- tour_embed_url text 
+  (final embed URL)
+- share_token text UNIQUE 
+  (random string for public URL)
+- is_watermarked boolean default true
+- error_message text
+- processing_started_at timestamptz
+- processing_completed_at timestamptz
+- email_sent boolean default false
+- created_at timestamptz default now()
+
+TABLE: tour_photos
+- id uuid PK default gen_random_uuid()
+- tour_id uuid FK → tours.id
+- original_url text
+- storage_path text
+- room_label text
+- quality_score integer
+- is_selected boolean default true
+- is_best_for_room boolean default false
+- is_ai_generated boolean default false
+- confidence_score float
+- angle_degrees integer
+- marble_world_id text
+- created_at timestamptz default now()
+
+TABLE: tour_views
+- id uuid PK default gen_random_uuid()
+- tour_id uuid FK → tours.id
+- viewer_ip text
+- country text
+- device_type text (mobile/tablet/desktop)
+- browser text
+- time_spent_seconds integer
+- rooms_visited jsonb
+- created_at timestamptz default now()
+
+TABLE: buyer_leads
+- id uuid PK default gen_random_uuid()
+- tour_id uuid FK → tours.id
+- agent_id uuid FK → profiles.id
+- buyer_name text
+- buyer_email text
+- buyer_phone text
+- message text
+- status text default 'new'
+  (new/contacted/converted)
+- created_at timestamptz default now()
+
+TABLE: verification_requests
+- id uuid PK default gen_random_uuid()
+- tour_id uuid FK → tours.id
+- requested_by uuid FK → profiles.id
+- seller_phone text
+- angles_to_verify jsonb
+- whatsapp_sid text
+- status text default 'pending'
+  (pending/completed/expired)
+- sent_at timestamptz
+- created_at timestamptz default now()
+
+TABLE: angle_flags
+- id uuid PK default gen_random_uuid()
+- tour_id uuid FK → tours.id
+- angle_id text
+- viewer_ip text
+- reason text
+- created_at timestamptz default now()
+
+Enable Row Level Security on all tables.
+Users can only read/write their own data.
+Tour viewer page bypasses RLS 
+(public read on tours table 
+by share_token only).
+
+═══════════════════════════════════════
+API ROUTES — build all of these:
+═══════════════════════════════════════
+
+POST /api/tours/create
+Input: { listing_url: string }
+Auth: required
+Logic:
+1. Check user tour limit for this month
+2. If at limit: return 403 with 
+   upgrade message
+3. Create tour record in DB 
+   with status 'pending'
+4. Generate unique share_token
+5. Trigger Inngest event: 
+   'tour/process.started'
+6. Return: { tour_id, share_token }
+
+POST /api/tours/extract
+(Called by Inngest background job)
+Input: { tour_id, listing_url }
+Logic:
+1. Update tour status to 'extracting'
+2. Call Apify API with listing URL
+   Use Zillow scraper for zillow.com
+   Use Airbnb scraper for airbnb.com
+   Use generic scraper for others
+3. Extract all photo URLs + 
+   listing metadata (address, price, beds)
+4. Update tour with listing metadata
+5. For each photo:
+   a. Download photo to Cloudflare R2
+   b. Call Claude Vision API:
+      Prompt: "Analyze this real estate photo.
+      Return JSON only:
+      {
+        room_label: string 
+        (Living Room/Kitchen/Master Bedroom/
+        Bedroom/Bathroom/Balcony/Garden/
+        Exterior/Other),
+        quality_score: number 1-5
+        (1=blurry/dark, 5=sharp/bright/wide),
+        is_interior: boolean,
+        is_best_angle: boolean
+      }"
+   c. Save to tour_photos table
+6. Mark best photo per room 
+   (highest quality_score)
+   Set is_best_for_room = true
+7. Update tour: 
+   total_photos_extracted, 
+   rooms_detected, 
+   status = 'generating'
+8. Trigger next Inngest step
+
+POST /api/tours/generate-3d
+(Called by Inngest background job)
+Input: { tour_id }
+Logic:
+1. Get all best-for-room photos 
+   for this tour
+2. For each room (in parallel, 
+   max 3 concurrent):
+   a. Get photo from Cloudflare R2
+   b. Upload to World Labs 
+      signed upload URL
+   c. Call World Labs API:
+      POST to world generation endpoint
+      Input: image asset ID
+      Model: marble-1.1 (standard)
+      Poll every 30 seconds until 
+      status = 'completed'
+   d. Extract world_marble_url 
+      from response
+   e. Save marble_world_id 
+      to tour_photos record
+   f. Update tour current_stage: 
+      "Generating 3D world for 
+      [Room Name]... ([N] of [N] complete)"
+3. Save all marble_world_ids 
+   to tours.marble_world_ids jsonb
+4. Calculate confidence_score:
+   (confirmed real photo angles / 
+   total angles) × 100
+5. Update tour status = 'ready'
+6. Increment user tours_this_month + 
+   total_tours
+7. Trigger: send ready email via Resend
+8. Return all world embed URLs
+
+GET /api/tours/status/[tour_id]
+Auth: required (tour owner only)
+Returns:
+{
+  status: string,
+  current_stage: string,
+  rooms_completed: number,
+  rooms_total: number,
+  estimated_minutes: number,
+  confidence_score: number
+}
+Used for polling every 15 seconds 
+from processing screen
+
+GET /api/tours/[share_token]
+Auth: NOT required (public)
+Returns tour data for viewer page:
+{
+  address: string,
+  platform: string,
+  marble_world_ids: array,
+  rooms: array of room names,
+  confidence_score: number,
+  real_angles: number,
+  ai_high_angles: number,
+  ai_low_angles: number,
+  is_watermarked: boolean,
+  agent_name: string,
+  agent_logo: string (if white-label)
+}
+Also: increment tour view count,
+log to tour_views table 
+with IP, country (use IP geolocation), 
+device type
+
+POST /api/tours/[tour_id]/lead
+Auth: NOT required (public)
+Input: { name, email, phone, message }
+Logic:
+1. Save to buyer_leads table
+2. Send email to agent via Resend:
+   Subject: "New buyer lead from your 
+   TourVision tour"
+   Body: buyer contact details + 
+   which tour they came from
+3. Return: { success: true }
+
+POST /api/verification/send
+Auth: required
+Input: { tour_id, seller_phone }
+Logic:
+1. Create verification_request record
+2. Send WhatsApp via Twilio:
+   To: +[seller_phone]
+   Message: "Hi! [Agent Name] has 
+   created a 3D virtual tour of your 
+   property using TourVision AI. 
+   Some viewing angles were 
+   AI-estimated and would benefit 
+   from real photos to improve 
+   accuracy for buyers. 
+   Please take 2-3 photos of: 
+   [list of low-confidence rooms] 
+   and reply to this message 
+   with the photos. 
+   Thank you! 
+   View the current tour: 
+   tourvision.app/tour/[token]"
+3. Return: { success: true }
+
+POST /api/angles/flag
+Auth: NOT required
+Rate limit: 3 per IP per tour
+Input: { tour_id, angle_id, reason }
+Logic:
+1. Save to angle_flags
+2. Count flags for this angle
+3. If count >= 3: 
+   notify tour owner by email
+4. Return: { success: true }
+
+POST /api/webhooks/stripe
+Handle events:
+- checkout.session.completed → 
+  update subscription_tier + status
+- customer.subscription.updated → 
+  update tier if plan changed
+- customer.subscription.deleted → 
+  set tier = 'free', status = 'cancelled'
+- invoice.payment_failed → 
+  set status = 'past_due',
+  send payment failed email
+- invoice.payment_succeeded → 
+  reset tours_this_month = 0 
+  on billing cycle renewal
+
+GET /api/user/limits
+Auth: required
+Returns:
+{
+  tier: string,
+  tours_this_month: number,
+  tours_limit: number,
+  tours_remaining: number,
+  renewal_date: string
+}
+
+═══════════════════════════════════════
+EXTERNAL INTEGRATIONS:
+═══════════════════════════════════════
+
+World Labs API:
+Base URL: https://api.worldlabs.ai
+Auth: Bearer token (WORLD_LABS_API_KEY)
+Flow:
+1. POST /v1/assets/upload-url 
+   → get signed upload URL
+2. PUT to signed URL with image binary
+3. POST /v1/worlds 
+   → { asset_id, model: "marble-1.1" }
+   → returns { world_id, status }
+4. GET /v1/worlds/[world_id] 
+   every 30 seconds until 
+   status = "completed"
+5. Extract world_marble_url 
+   from response for embedding
+
+Apify API:
+Base URL: https://api.apify.com/v2
+Key actors:
+- Zillow: maxim/zillow-scraper
+- Airbnb: apify/airbnb-scraper  
+- Generic: apify/web-scraper
+Call: POST /acts/[actor]/runs
+Poll: GET /acts/[actor]/runs/[runId] 
+until status = SUCCEEDED
+Extract: dataset items (photo URLs, 
+listing details)
+
+Claude Vision API (Anthropic):
+Model: claude-opus-4-5
+Use for room labeling + quality scoring
+Send image as base64 in message content
+Parse JSON response strictly
+Fallback if parsing fails: 
+label = "Room", quality = 3
+
+Stripe:
+Products to create in Stripe dashboard:
+- TourVision Pro: $149/month recurring
+- TourVision Unlimited: $299/month recurring
+Use Stripe Checkout for signup
+Use Stripe Customer Portal for management
+Webhook endpoint: /api/webhooks/stripe
+
+Twilio:
+WhatsApp Business API
+Account: TWILIO_ACCOUNT_SID
+Token: TWILIO_AUTH_TOKEN
+From: whatsapp:+[TWILIO_NUMBER]
+Used only for seller verification messages
+
+Resend:
+Transactional emails:
+- Welcome email on signup
+- Tour ready notification
+- Buyer lead notification
+- Payment failed warning
+- Weekly usage summary (every Monday)
+From: hello@tourvision.app
+
+═══════════════════════════════════════
+ENVIRONMENT VARIABLES:
+═══════════════════════════════════════
+
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
+STRIPE_PRO_PRICE_ID=
+STRIPE_UNLIMITED_PRICE_ID=
+WORLD_LABS_API_KEY=
+APIFY_API_KEY=
+ANTHROPIC_API_KEY=
+TWILIO_ACCOUNT_SID=
+TWILIO_AUTH_TOKEN=
+TWILIO_WHATSAPP_NUMBER=
+RESEND_API_KEY=
+NEXT_PUBLIC_APP_URL=https://tourvision.app
+CLOUDFLARE_R2_ACCESS_KEY=
+CLOUDFLARE_R2_SECRET_KEY=
+CLOUDFLARE_R2_BUCKET=
+CLOUDFLARE_R2_ENDPOINT=
+
+═══════════════════════════════════════
+IMPORTANT RULES FOR BUILDING:
+═══════════════════════════════════════
+
+1. Every loading state has a skeleton 
+   or spinner — never blank white space
+
+2. Every action has a toast notification:
+   Success: green toast, bottom right
+   Error: red toast with error message
+   Loading: grey toast that updates
+
+3. Every destructive action 
+   (delete tour, cancel subscription) 
+   has a confirmation modal
+
+4. All forms have proper validation 
+   with inline error messages 
+   shown in red below each field
+
+5. The app must work perfectly 
+   on mobile — test every page 
+   at 375px width
+
+6. All database queries use 
+   Supabase Row Level Security — 
+   users never see each other's data
+
+7. The share link page (/tour/[token]) 
+   must load fast — 
+   under 2 seconds on mobile data. 
+   Optimize the World Labs embed 
+   for fast initial load.
+
+8. If World Labs API fails for a room: 
+   skip that room silently, 
+   mark it as unavailable in the tour, 
+   do not fail the entire tour
+
+9. If Apify scraping fails: 
+   show error message with option 
+   to upload photos manually instead
+
+10. Tour processing must survive 
+    page refreshes — 
+    processing happens in Inngest 
+    background jobs, 
+    not in the browser.
+    User can close the tab and 
+    come back later.
+
+═══════════════════════════════════════
+BUILD IN THIS EXACT ORDER:
+═══════════════════════════════════════
+
+Phase 1 — Foundation:
+1. Next.js project setup, 
+   Tailwind, shadcn/ui, Framer Motion
+2. Supabase schema (all tables)
+3. Auth pages (login, signup, 
+   Google OAuth, protected routes)
+4. Onboarding flow
+5. Dashboard shell with sidebar
+
+Phase 2 — Core Feature:
+6. New Tour flow (all 4 steps)
+7. Apify integration (photo extraction)
+8. Claude Vision integration 
+   (room labeling)
+9. World Labs API integration 
+   (3D generation)
+10. Inngest background job pipeline
+11. Status polling on processing screen
+12. Tour viewer page (public)
+
+Phase 3 — Business Features:
+13. Stripe integration 
+    (checkout + webhooks + portal)
+14. Tour limits enforcement by tier
+15. My Tours page with search/filter
+16. Analytics page with charts
+17. Settings page (all tabs)
+18. Billing page
+
+Phase 4 — Growth Features:
+19. Buyer lead capture on viewer page
+20. Seller verification (Twilio WhatsApp)
+21. Angle flagging system
+22. Email notifications (Resend)
+23. Tour view tracking + analytics
+24. Confidence indicator overlay 
+    on viewer page
+
+Phase 5 — Polish:
+25. Mobile optimization pass 
+    (every page at 375px)
+26. Loading skeletons everywhere
+27. Error handling for all edge cases
+28. Performance optimization
+29. Vercel deployment + 
+    environment variables
+30. End to end test: 
+    paste real Zillow URL → 
+    receive working 3D tour share link
+
+═══════════════════════════════════════
+START HERE — FIRST TASK:
+═══════════════════════════════════════
+
+Begin with Phase 1, Step 1.
+
+Set up the Next.js 14 project with:
+- App Router
+- Tailwind CSS configured with 
+  the exact color system above
+- shadcn/ui initialized
+- Framer Motion installed
+- Inter, Syne, Space Mono 
+  from Google Fonts
+- Supabase client configured
+- All environment variables 
+  in .env.local with placeholder values
+- The complete folder structure:
+  /app
+    /dashboard
+      /new-tour
+      /tours
+      /analytics  
+      /settings
+      /billing
+    /tour/[token]
+    /login
+    /signup
+    /onboarding
+    /api
+      /tours
+      /verification
+      /angles
+      /webhooks
+      /user
+  /components
+    /ui (shadcn components)
+    /dashboard
+    /tour
+    /landing
+  /lib
+    /supabase
+    /stripe
+    /worldlabs
+    /apify
+    /anthropic
+    /twilio
+    /resend
+    /inngest
+  /types
+  /hooks
+
+Create the complete Supabase schema 
+(all tables with RLS policies).
+Show me the working auth flow 
+(signup → onboarding → dashboard) 
+before moving to Phase 2.

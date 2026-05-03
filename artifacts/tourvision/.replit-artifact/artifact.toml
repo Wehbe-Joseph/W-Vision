@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "TourVision"
+version = "1.0.0"
+id = "artifacts/tourvision"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18992
+
+[services.development]
+run = "pnpm --filter @workspace/tourvision run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/tourvision", "run", "build" ]
+publicDir = "artifacts/tourvision/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18992"
+BASE_PATH = "/"
