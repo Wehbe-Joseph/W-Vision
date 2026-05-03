@@ -21,7 +21,7 @@ export default function Landing() {
   return (
     <div className="min-h-screen bg-background text-foreground font-sans selection:bg-primary/30">
       <div className="fixed inset-0 pointer-events-none z-0">
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:50px_50px] [mask-image:radial-gradient(ellipse_50%_50%_at_50%_0%,#000_70%,transparent_100%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(26,23,20,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(26,23,20,0.04)_1px,transparent_1px)] bg-[size:50px_50px] [mask-image:radial-gradient(ellipse_60%_60%_at_50%_0%,#000_60%,transparent_100%)]" />
       </div>
 
       {/* Navbar */}
@@ -87,9 +87,9 @@ export default function Landing() {
           </motion.div>
 
           <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6, duration: 0.8 }} className="mt-20 relative">
-            <div className="absolute -inset-10 bg-primary/20 blur-[100px] rounded-full z-0" />
+            <div className="absolute -inset-10 bg-foreground/5 blur-[80px] rounded-full z-0" />
             <div className="relative z-10 rounded-xl border border-border bg-card shadow-2xl overflow-hidden aspect-[16/9] flex items-center justify-center">
-              <span className="text-muted-foreground font-mono">Dashboard Mockup (Dark + Green)</span>
+              <span className="text-muted-foreground font-mono uppercase tracking-widest text-sm">Dashboard Preview</span>
             </div>
             
             {/* Floating Stats */}
@@ -160,18 +160,18 @@ export default function Landing() {
                   <Button className="w-full" variant="outline">Start Free</Button>
                 </Link>
               </div>
-              <div className="bg-card border-2 border-primary p-8 rounded-xl relative scale-105 shadow-[0_0_40px_rgba(0,255,136,0.1)]">
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-primary text-primary-foreground text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">Most Popular</div>
-                <h3 className="text-xl font-bold mb-2">Pro</h3>
-                <div className="text-4xl font-serif font-bold mb-6">$149<span className="text-lg text-muted-foreground font-sans font-normal">/mo</span></div>
-                <ul className="flex flex-col gap-3 mb-8 text-muted-foreground text-sm">
-                  <li className="flex gap-2"><CheckCircle2 className="w-4 h-4 text-primary shrink-0" /> 15 Tours per month</li>
-                  <li className="flex gap-2"><CheckCircle2 className="w-4 h-4 text-primary shrink-0" /> Priority Processing</li>
-                  <li className="flex gap-2"><CheckCircle2 className="w-4 h-4 text-primary shrink-0" /> Custom Agency Branding</li>
-                  <li className="flex gap-2"><CheckCircle2 className="w-4 h-4 text-primary shrink-0" /> Analytics Dashboard</li>
+              <div className="bg-foreground text-background p-8 rounded-xl relative scale-105 shadow-2xl">
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-background text-foreground text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider border border-border">Most Popular</div>
+                <h3 className="text-xl font-bold mb-2 text-background">Pro</h3>
+                <div className="text-4xl font-serif font-bold mb-6 text-background">$149<span className="text-lg opacity-60 font-sans font-normal">/mo</span></div>
+                <ul className="flex flex-col gap-3 mb-8 text-background/70 text-sm">
+                  <li className="flex gap-2"><CheckCircle2 className="w-4 h-4 text-background shrink-0" /> 15 Tours per month</li>
+                  <li className="flex gap-2"><CheckCircle2 className="w-4 h-4 text-background shrink-0" /> Priority Processing</li>
+                  <li className="flex gap-2"><CheckCircle2 className="w-4 h-4 text-background shrink-0" /> Custom Agency Branding</li>
+                  <li className="flex gap-2"><CheckCircle2 className="w-4 h-4 text-background shrink-0" /> Analytics Dashboard</li>
                 </ul>
                 <Link href="/signup">
-                  <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-bold">Upgrade to Pro</Button>
+                  <Button className="w-full bg-background text-foreground hover:bg-background/90 font-bold">Upgrade to Pro</Button>
                 </Link>
               </div>
               <div className="bg-card border border-border p-8 rounded-xl">

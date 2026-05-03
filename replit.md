@@ -19,10 +19,11 @@ Full-stack SaaS app that converts property listing URLs into 3D virtual tours po
 
 ## Design System
 
-- **Background**: #080808 (near-black)
-- **Primary accent**: #00FF88 (electric green)
-- **Fonts**: Syne (headings/serif), Inter (body/sans), Space Mono (mono)
-- **Theme**: Dark-only
+- **Background**: warm cream/beige ~#EDE8E1 (HSL 38 22% 90%)
+- **Foreground**: near-black warm brown ~#1A1714 (HSL 24 12% 9%)
+- **Primary**: near-black (dark buttons/accents on the light surface)
+- **Fonts**: Bebas Neue (display/headings), Space Grotesk (body/sans), Space Mono (mono)
+- **Theme**: Light warm cream — single theme, no dark mode toggle
 
 ## Key Commands
 

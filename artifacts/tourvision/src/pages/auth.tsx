@@ -30,14 +30,14 @@ export function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
     <div className="min-h-screen flex bg-background">
       {/* Left Panel */}
       <div className="hidden lg:flex w-[60%] relative overflow-hidden bg-card border-r border-border items-center justify-center p-12">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(0,255,136,0.1)_0%,transparent_70%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(26,23,20,0.06)_0%,transparent_70%)]" />
         <motion.div 
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.8 }}
-          className="relative z-10 w-full max-w-lg aspect-square rounded-2xl border border-border bg-background shadow-2xl overflow-hidden flex items-center justify-center"
+          className="relative z-10 w-full max-w-lg aspect-square rounded-2xl border border-border bg-muted shadow-2xl overflow-hidden flex items-center justify-center"
         >
-          <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:40px_40px]" />
+          <div className="absolute inset-0 bg-[linear-gradient(rgba(26,23,20,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(26,23,20,0.05)_1px,transparent_1px)] bg-[size:40px_40px]" />
           
           <motion.div animate={{ rotateY: 360 }} transition={{ repeat: Infinity, duration: 20, ease: "linear" }} className="w-64 h-64 border border-primary/30 rounded-full flex items-center justify-center relative">
             <div className="w-48 h-48 border border-primary/50 rounded-full flex items-center justify-center">
