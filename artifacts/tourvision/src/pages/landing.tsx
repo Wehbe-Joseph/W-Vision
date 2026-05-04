@@ -35,7 +35,6 @@ export default function Landing() {
       <div className="fixed inset-0 pointer-events-none z-0">
         <div className="absolute inset-0 bg-[linear-gradient(rgba(26,23,20,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(26,23,20,0.04)_1px,transparent_1px)] bg-[size:50px_50px] [mask-image:radial-gradient(ellipse_60%_60%_at_50%_0%,#000_60%,transparent_100%)]" />
       </div>
-
       {/* Navbar */}
       <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-background/80 backdrop-blur-xl">
         <div className="container mx-auto px-6 h-16 flex items-center justify-between">
@@ -57,7 +56,6 @@ export default function Landing() {
           </div>
         </div>
       </nav>
-
       <main className="relative z-10 pt-32 pb-20 overflow-hidden">
         {/* Hero */}
         <section className="container mx-auto px-6 text-center max-w-5xl">
@@ -89,9 +87,7 @@ export default function Landing() {
                   <ArrowRight className="w-5 h-5" />
                 </button>
               </form>
-              <p className="text-xs text-muted-foreground mt-3 text-center font-mono">
-                Paste any Zillow, Airbnb, Bayut, or Property Finder link
-              </p>
+              <p className="text-xs text-muted-foreground mt-3 text-center font-mono">Paste any Zillow, Airbnb, Bayut, booking or Property Finder link</p>
             </motion.div>
             <motion.div variants={fadeUp} className="flex flex-wrap justify-center gap-8 text-sm text-muted-foreground font-medium">
               <div className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-primary" /> No credit card required</div>
@@ -222,7 +218,6 @@ export default function Landing() {
         </section>
 
       </main>
-
       <footer className="border-t border-border bg-card pt-16 pb-8">
         <div className="container mx-auto px-6 grid md:grid-cols-4 gap-12 mb-12">
           <div>
