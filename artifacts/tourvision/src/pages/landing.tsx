@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { SiZillow, SiAirbnb } from "react-icons/si";
-import { CheckCircle2, ArrowRight, Cuboid, Link as LinkIcon, ShieldCheck } from "lucide-react";
+import { CheckCircle2, ArrowRight, Cuboid, Link as LinkIcon, ShieldCheck, Share2, BarChart3, Building2, Eye, Users, Clock, TrendingUp, Copy, CheckCheck } from "lucide-react";
 import { useState } from "react";
 
 const fadeUp = {
@@ -16,6 +16,30 @@ const staggerContainer = {
   hidden: { opacity: 0 },
   visible: { opacity: 1, transition: { staggerChildren: 0.1 } }
 };
+
+function FeatureCard({ label, title, desc, children }: { label: string; title: string; desc: string; children: React.ReactNode }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 32 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: "-80px" }}
+      transition={{ duration: 0.5, ease: "easeOut" }}
+      className="bg-card border border-border rounded-2xl overflow-hidden"
+    >
+      <div className="p-8 pb-4">
+        <p className="text-xs font-mono text-muted-foreground uppercase tracking-widest mb-4">{label}</p>
+        <h3 className="text-2xl font-serif font-bold mb-3 leading-tight">{title}</h3>
+        <p className="text-muted-foreground text-sm leading-relaxed mb-6">{desc}</p>
+        <Link href="/signup" className="inline-flex items-center gap-1 text-sm font-bold hover:gap-2 transition-all">
+          Try Now <ArrowRight className="w-4 h-4" />
+        </Link>
+      </div>
+      <div className="mx-6 mb-6 bg-background border border-border rounded-xl overflow-hidden">
+        {children}
+      </div>
+    </motion.div>
+  );
+}
 
 export default function Landing() {
   const [url, setUrl] = useState("");
@@ -112,6 +136,174 @@ export default function Landing() {
               <span className="text-xs text-muted-foreground uppercase tracking-wider">Avg Processing</span>
             </motion.div>
           </motion.div>
+        </section>
+
+        {/* ── Sticky Feature Showcase ── */}
+        <section className="mt-32 container mx-auto px-6">
+          <div className="flex gap-12 xl:gap-20 items-start">
+
+            {/* LEFT — sticky panel */}
+            <div className="hidden lg:flex flex-col sticky top-24 self-start w-[340px] xl:w-[380px] shrink-0">
+              <h2 className="text-4xl xl:text-5xl font-serif font-bold leading-[1.1] mb-5">
+                Virtual tours.<br />Built in minutes.
+              </h2>
+              <p className="text-muted-foreground text-base mb-8 leading-relaxed">
+                From listing URL to navigable 3D walkthrough — TourVision handles the entire workflow.
+              </p>
+              <Link href="/signup">
+                <Button className="w-fit bg-primary text-primary-foreground font-bold px-6 h-11 mb-10">
+                  Start Free →
+                </Button>
+              </Link>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { icon: LinkIcon,    label: "Paste URL"     },
+                  { icon: Cuboid,      label: "3D Generation" },
+                  { icon: Share2,      label: "Share Link"    },
+                  { icon: BarChart3,   label: "Analytics"     },
+                  { icon: ShieldCheck, label: "AI Confidence" },
+                  { icon: Building2,   label: "Agency Brand"  },
+                ].map(({ icon: Icon, label }) => (
+                  <div key={label} className="flex flex-col items-center gap-2 bg-card border border-border rounded-xl p-4 text-center">
+                    <Icon className="w-5 h-5 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground font-mono">{label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* RIGHT — scrolling feature cards */}
+            <div className="flex-1 flex flex-col gap-6 pb-12">
+
+              {/* Card 1 — Paste Any Link */}
+              <FeatureCard label="PASTE ANY LINK" title="Any listing. Instantly extracted." desc="Drop a URL from Zillow, Airbnb, Bayut, or Property Finder. Our engine extracts every photo automatically — no uploads, no manual work.">
+                <div className="p-6 flex flex-col gap-4">
+                  <div className="flex items-center gap-3 bg-background border border-border rounded-lg px-4 h-11 shadow-sm">
+                    <LinkIcon className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <span className="text-sm font-mono text-muted-foreground truncate">https://bayut.com/property/villa-palm-jumeirah-7482...</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {["Zillow", "Airbnb", "Bayut", "PropertyFinder", "Booking.com", "Rightmove"].map(p => (
+                      <span key={p} className="text-xs font-mono bg-muted border border-border px-3 py-1 rounded-full text-muted-foreground">{p}</span>
+                    ))}
+                  </div>
+                  <div className="mt-2 space-y-2">
+                    {["Extracting photos", "Detecting rooms", "Mapping geometry"].map((step, i) => (
+                      <div key={step} className="flex items-center gap-3">
+                        <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${i < 2 ? "bg-primary" : "bg-muted border border-border"}`}>
+                          {i < 2 && <CheckCheck className="w-2.5 h-2.5 text-primary-foreground" />}
+                        </div>
+                        <div className="flex-1 bg-muted rounded-full h-1.5 overflow-hidden">
+                          <div className="bg-primary h-full rounded-full transition-all" style={{ width: i === 0 ? "100%" : i === 1 ? "100%" : "40%" }} />
+                        </div>
+                        <span className="text-xs font-mono text-muted-foreground w-24 shrink-0">{step}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </FeatureCard>
+
+              {/* Card 2 — 3D Generation */}
+              <FeatureCard label="3D GENERATION" title="Photorealistic rooms. Ready in minutes." desc="Our spatial AI engine builds navigable 3D geometry from your listing photos. Every room, every angle — without a camera crew.">
+                <div className="p-4 grid grid-cols-2 gap-3">
+                  {[
+                    { room: "Living Room",   conf: 97, color: "bg-emerald-100 border-emerald-200" },
+                    { room: "Master Bedroom",conf: 91, color: "bg-amber-100 border-amber-200"   },
+                    { room: "Kitchen",       conf: 88, color: "bg-sky-100 border-sky-200"        },
+                    { room: "Bathroom",      conf: 84, color: "bg-rose-100 border-rose-200"      },
+                  ].map(({ room, conf, color }) => (
+                    <div key={room} className={`border rounded-lg p-3 flex flex-col gap-2 ${color}`}>
+                      <div className="h-20 bg-white/60 rounded-md flex items-center justify-center">
+                        <Cuboid className="w-8 h-8 text-foreground/30" />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium truncate">{room}</span>
+                        <span className="text-xs font-mono font-bold shrink-0">{conf}%</span>
+                      </div>
+                      <div className="bg-white/50 rounded-full h-1 overflow-hidden">
+                        <div className="bg-foreground/40 h-full rounded-full" style={{ width: `${conf}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </FeatureCard>
+
+              {/* Card 3 — Share a Tour */}
+              <FeatureCard label="SHARE A TOUR" title="One link. Every buyer." desc="Get a shareable URL the moment your tour is ready. Embed it in emails, WhatsApp, or your listing page — buyers explore with no app required.">
+                <div className="p-6 flex flex-col gap-4">
+                  <div className="bg-background border border-border rounded-xl p-4 shadow-sm flex flex-col gap-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">Share Tour Link</span>
+                      <span className="text-xs font-mono text-emerald-600 font-bold">● Live</span>
+                    </div>
+                    <div className="flex items-center gap-2 bg-muted rounded-lg px-3 h-9">
+                      <span className="flex-1 text-xs font-mono text-muted-foreground truncate">tourvision.app/tour/palm-jumeirah-villa</span>
+                      <Copy className="w-3.5 h-3.5 text-muted-foreground shrink-0 cursor-pointer" />
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 pt-1">
+                      {[
+                        { label: "Views",   val: "248" },
+                        { label: "Leads",   val: "12"  },
+                        { label: "Avg Time",val: "4:32" },
+                      ].map(({ label, val }) => (
+                        <div key={label} className="bg-muted rounded-lg p-2 text-center">
+                          <div className="text-lg font-bold font-serif">{val}</div>
+                          <div className="text-[10px] font-mono text-muted-foreground">{label}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <div className="flex-1 bg-card border border-border rounded-lg p-3 text-center text-xs font-mono text-muted-foreground">WhatsApp</div>
+                    <div className="flex-1 bg-card border border-border rounded-lg p-3 text-center text-xs font-mono text-muted-foreground">Email</div>
+                    <div className="flex-1 bg-card border border-border rounded-lg p-3 text-center text-xs font-mono text-muted-foreground">Embed</div>
+                  </div>
+                </div>
+              </FeatureCard>
+
+              {/* Card 4 — Buyer Analytics */}
+              <FeatureCard label="BUYER ANALYTICS" title="Know exactly who's looking." desc="See which rooms buyers linger in, how long they explore, and when they drop off. Real data to qualify leads before the first call.">
+                <div className="p-6 flex flex-col gap-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { icon: Eye,        label: "Total Views",   val: "1,284", trend: "+18%"  },
+                      { icon: Clock,      label: "Avg Time",      val: "5:14",  trend: "+42s"  },
+                      { icon: Users,      label: "Leads",         val: "73",    trend: "+9"    },
+                      { icon: TrendingUp, label: "Conversion",    val: "5.7%",  trend: "+1.2%" },
+                    ].map(({ icon: Icon, label, val, trend }) => (
+                      <div key={label} className="bg-muted border border-border rounded-xl p-4 flex flex-col gap-2">
+                        <div className="flex items-center justify-between">
+                          <Icon className="w-4 h-4 text-muted-foreground" />
+                          <span className="text-[10px] font-mono text-emerald-600 font-bold">{trend}</span>
+                        </div>
+                        <div className="text-2xl font-bold font-serif">{val}</div>
+                        <div className="text-xs font-mono text-muted-foreground">{label}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="bg-muted border border-border rounded-xl p-4">
+                    <div className="text-xs font-mono text-muted-foreground mb-3 uppercase tracking-wider">Most Viewed Rooms</div>
+                    <div className="flex flex-col gap-2">
+                      {[
+                        { room: "Living Room",    pct: 88 },
+                        { room: "Master Bedroom", pct: 71 },
+                        { room: "Kitchen",        pct: 54 },
+                      ].map(({ room, pct }) => (
+                        <div key={room} className="flex items-center gap-3">
+                          <span className="text-xs font-mono text-foreground w-32 shrink-0">{room}</span>
+                          <div className="flex-1 bg-background rounded-full h-1.5 overflow-hidden">
+                            <div className="bg-primary h-full rounded-full" style={{ width: `${pct}%` }} />
+                          </div>
+                          <span className="text-xs font-mono text-muted-foreground w-8 text-right">{pct}%</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </FeatureCard>
+
+            </div>
+          </div>
         </section>
 
         {/* Logo bar */}
