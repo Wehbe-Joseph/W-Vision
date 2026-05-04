@@ -64,7 +64,7 @@ export default function Landing() {
         <div className="container mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-primary animate-pulse" />
-            <span className="font-serif font-bold text-xl tracking-tight">TourVision</span>
+            <span className="font-serif font-bold text-xl tracking-tight">W Vision</span>
           </div>
           <div className="hidden md:flex items-center gap-8 text-sm font-medium text-muted-foreground">
             <a href="#how-it-works" className="hover:text-primary transition-colors">How it Works</a>
