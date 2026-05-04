@@ -1,11 +1,11 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { SiZillow, SiAirbnb } from "react-icons/si";
-import { CheckCircle2, Play, ArrowRight, Camera, Cuboid, Link as LinkIcon, ShieldCheck, BarChart3 } from "lucide-react";
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
+import { CheckCircle2, ArrowRight, Cuboid, Link as LinkIcon, ShieldCheck } from "lucide-react";
+import { useState } from "react";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
@@ -18,6 +18,18 @@ const staggerContainer = {
 };
 
 export default function Landing() {
+  const [url, setUrl] = useState("");
+  const [, setLocation] = useLocation();
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (url.trim()) {
+      setLocation(`/signup?url=${encodeURIComponent(url.trim())}`);
+    } else {
+      setLocation("/signup");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground font-sans selection:bg-primary/30">
       <div className="fixed inset-0 pointer-events-none z-0">
@@ -60,24 +72,26 @@ export default function Landing() {
             <motion.p variants={fadeUp} className="text-xl text-muted-foreground mb-10 max-w-2xl">
               Paste a URL. Our AI extracts the photos, builds a photorealistic 3D world, and gives you a shareable tour link in minutes.
             </motion.p>
-            <motion.div variants={fadeUp} className="flex flex-col sm:flex-row items-center gap-4 mb-12">
-              <Link href="/signup">
-                <Button size="lg" className="bg-primary text-primary-foreground hover:bg-primary/90 glow-primary font-bold text-lg h-14 px-8">
-                  Generate Your First Tour Free <ArrowRight className="ml-2" />
-                </Button>
-              </Link>
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button size="lg" variant="outline" className="border-primary text-primary hover:bg-primary/10 h-14 px-8 text-lg font-bold">
-                    <Play className="mr-2 w-5 h-5 fill-current" /> Watch 60s Demo
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-4xl p-0 bg-black border-border">
-                   <div className="aspect-video bg-card flex items-center justify-center text-muted-foreground font-mono">
-                      [Demo Video Embed Placeholder]
-                   </div>
-                </DialogContent>
-              </Dialog>
+            <motion.div variants={fadeUp} className="w-full max-w-xl mb-12">
+              <form onSubmit={handleSubmit} className="flex items-center gap-0 bg-background border border-border rounded-xl shadow-md overflow-hidden focus-within:ring-2 focus-within:ring-primary/30 transition-all">
+                <Input
+                  type="url"
+                  value={url}
+                  onChange={e => setUrl(e.target.value)}
+                  placeholder="https://www.zillow.com/homedetails/..."
+                  className="flex-1 h-14 px-5 border-0 shadow-none focus-visible:ring-0 bg-transparent text-base placeholder:text-muted-foreground/60 font-mono text-sm"
+                />
+                <button
+                  type="submit"
+                  className="h-10 w-10 mr-2 rounded-lg bg-primary text-primary-foreground flex items-center justify-center shrink-0 hover:bg-primary/85 transition-colors"
+                  aria-label="Generate tour"
+                >
+                  <ArrowRight className="w-5 h-5" />
+                </button>
+              </form>
+              <p className="text-xs text-muted-foreground mt-3 text-center font-mono">
+                Paste any Zillow, Airbnb, Bayut, or Property Finder link
+              </p>
             </motion.div>
             <motion.div variants={fadeUp} className="flex flex-wrap justify-center gap-8 text-sm text-muted-foreground font-medium">
               <div className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-primary" /> No credit card required</div>
