@@ -122,7 +122,7 @@ export default function Landing() {
             <div className="flex items-center gap-2 text-2xl font-bold font-serif text-[#757575]"><SiAirbnb /> Airbnb</div>
             <div className="text-2xl font-bold font-serif tracking-tight text-[#757575]">Bayut</div>
             <div className="text-2xl font-bold font-serif tracking-tight text-[#757575]">PropertyFinder</div>
-            <div className="text-2xl font-bold font-serif tracking-tight">Rightmove</div>
+            <div className="text-2xl font-bold font-serif tracking-tight text-[#757575] bg-[transparent]">Rightmove</div>
           </div>
         </section>
 
