@@ -87,7 +87,7 @@ export default function Landing() {
                   <ArrowRight className="w-5 h-5" />
                 </button>
               </form>
-              <p className="text-xs text-muted-foreground mt-3 text-center font-mono">Paste any Zillow, Airbnb, Bayut, booking or Property Finder link</p>
+              <p className="text-xs text-muted-foreground mt-3 text-center font-mono">Paste any Zillow, Airbnb, Bayut, Booking or Property Finder link</p>
             </motion.div>
             <motion.div variants={fadeUp} className="flex flex-wrap justify-center gap-8 text-sm text-muted-foreground font-medium">
               <div className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-primary" /> No credit card required</div>
