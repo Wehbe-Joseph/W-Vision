@@ -119,7 +119,7 @@ export default function Landing() {
           <p className="text-sm text-muted-foreground font-mono uppercase tracking-widest mb-6">Trusted by elite agents</p>
           <div className="flex gap-16 items-center text-muted opacity-50 px-6">
             <div className="flex items-center gap-2 text-2xl font-bold font-serif text-[#757575]"><SiZillow /> Zillow</div>
-            <div className="flex items-center gap-2 text-2xl font-bold font-serif"><SiAirbnb /> Airbnb</div>
+            <div className="flex items-center gap-2 text-2xl font-bold font-serif text-[#757575]"><SiAirbnb /> Airbnb</div>
             <div className="text-2xl font-bold font-serif tracking-tight">Bayut</div>
             <div className="text-2xl font-bold font-serif tracking-tight">PropertyFinder</div>
             <div className="text-2xl font-bold font-serif tracking-tight">Rightmove</div>
