@@ -44,7 +44,7 @@ export function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
                <div className="w-32 h-32 bg-primary/20 rounded-full blur-xl animate-pulse" />
             </div>
             {/* Feature callouts */}
-            <div className="absolute -top-4 right-0 bg-background border border-border px-3 py-1 rounded-md text-xs font-mono text-primary shadow-lg whitespace-nowrap">Marble 3D Mesh</div>
+            <div className="absolute -top-4 right-0 bg-background border border-border px-3 py-1 rounded-md text-xs font-mono text-primary shadow-lg whitespace-nowrap">3D World Mesh</div>
             <div className="absolute bottom-4 -left-12 bg-background border border-border px-3 py-1 rounded-md text-xs font-mono text-primary shadow-lg whitespace-nowrap">AI Confidence: 94%</div>
           </motion.div>
         </motion.div>

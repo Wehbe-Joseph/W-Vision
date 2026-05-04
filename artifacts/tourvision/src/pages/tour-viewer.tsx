@@ -62,12 +62,12 @@ export default function TourViewer() {
               />
               {/* Dark vignette overlay */}
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/40" />
-              {/* Marble placeholder badge */}
+              {/* 3D engine placeholder badge */}
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <div className="bg-background/60 backdrop-blur-md border border-border/60 rounded-2xl px-6 py-4 flex flex-col items-center gap-2 shadow-2xl">
                   <Cuboid className="w-8 h-8 text-primary/70 animate-pulse" />
-                  <span className="font-mono text-xs text-muted-foreground">World Labs Marble 3D</span>
-                  <span className="font-mono text-xs text-primary/60">Connect API key to activate</span>
+                  <span className="font-mono text-xs text-muted-foreground">3D generation engine</span>
+                  <span className="font-mono text-xs text-primary/60">Spatial AI is rendering your tour...</span>
                 </div>
               </div>
             </motion.div>

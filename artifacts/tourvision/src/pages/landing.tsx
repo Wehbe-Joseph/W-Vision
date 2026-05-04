@@ -51,7 +51,7 @@ export default function Landing() {
         <section className="container mx-auto px-6 text-center max-w-5xl">
           <motion.div initial="hidden" animate="visible" variants={staggerContainer} className="flex flex-col items-center">
             <motion.div variants={fadeUp} className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-primary/30 bg-primary/5 text-primary text-sm mb-8 font-mono">
-              ✦ Powered by World Labs Marble AI
+              ✦ Built on next-generation 3D world generation
             </motion.div>
             <motion.h1 variants={fadeUp} className="text-5xl md:text-7xl font-serif font-extrabold tracking-tighter leading-[1.1] mb-6">
               Any Listing. Any Photos.<br />
@@ -122,7 +122,7 @@ export default function Landing() {
           <div className="grid md:grid-cols-3 gap-8 mb-12">
             {[
               { step: "01", title: "Paste URL", desc: "Drop any Zillow, Airbnb, or Property Finder link.", icon: LinkIcon },
-              { step: "02", title: "AI Builds 3D", desc: "World Labs Marble extracts photos and builds the geometry.", icon: Cuboid },
+              { step: "02", title: "AI Builds 3D", desc: "Our spatial AI engine extracts photos and builds the geometry.", icon: Cuboid },
               { step: "03", title: "Share One Link", desc: "Get an instant, navigable embed for buyers.", icon: ArrowRight }
             ].map((s, i) => (
               <div key={i} className="bg-card border border-border p-8 rounded-xl flex flex-col items-center text-center relative group hover:border-primary/50 transition-colors">
@@ -202,7 +202,7 @@ export default function Landing() {
             </AccordionItem>
             <AccordionItem value="item-3" className="border-border">
               <AccordionTrigger className="hover:text-primary">How accurate is the AI?</AccordionTrigger>
-              <AccordionContent className="text-muted-foreground">World Labs Marble AI creates photorealistic geometry based on your photos. Areas not captured in photos are AI-estimated, which you can clearly see using our Confidence Indicator.</AccordionContent>
+              <AccordionContent className="text-muted-foreground">TourVision's spatial AI engine creates photorealistic geometry based on your photos. Areas not captured in photos are AI-estimated, which you can clearly see using our Confidence Indicator.</AccordionContent>
             </AccordionItem>
           </Accordion>
         </section>

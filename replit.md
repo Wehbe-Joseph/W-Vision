@@ -2,7 +2,7 @@
 
 ## Overview
 
-Full-stack SaaS app that converts property listing URLs into 3D virtual tours powered by World Labs Marble API. Built as a pnpm monorepo with React+Vite frontend, Express 5 backend, and PostgreSQL/Drizzle ORM.
+Full-stack SaaS app that converts property listing URLs into 3D virtual tours powered by a proprietary spatial AI engine. Built as a pnpm monorepo with React+Vite frontend, Express 5 backend, and PostgreSQL/Drizzle ORM.
 
 ## Stack
 
@@ -51,7 +51,7 @@ Tables: `profiles`, `tours`, `tour_photos`, `tour_views`, `buyer_leads`, `angle_
 Key columns:
 - `tours.floor_count` — number of floors detected
 - `tour_photos.floor_number` — which floor this room/photo is on
-- `tour_photos.marble_world_id` / `marble_embed_url` — World Labs Marble integration fields
+- `tour_photos.marble_world_id` / `marble_embed_url` — 3D engine integration fields (internal identifiers, not customer-facing)
 - `tours.share_token` — unique token for public tour sharing
 
 ## Auth Pattern
@@ -62,11 +62,11 @@ Key columns:
 
 ## Tour Viewer Special Features
 
-- Floating hamburger button (top-left, dark bg, green on hover)
+- Floating hamburger button (top-left, dark bg)
 - Room sidebar: slides from left in 300ms, 280px desktop / full-width mobile, rgba(8,8,8,0.95) + backdrop blur
 - Room thumbnails shown inline in sidebar with floor number
 - AI Confidence Layer toggle (shows real photo vs AI-generated zones)
-- Falls back to room thumbnail image when Marble iframe is blocked/unavailable
+- Falls back to room thumbnail image when 3D embed iframe is unavailable
 
 ## API Routes
 
@@ -87,6 +87,6 @@ Key columns:
 - `GET /api/analytics/tour-stats`
 - `POST /api/tours/:tourId/flags` — flag AI angle
 
-## World Labs Marble Integration
+## Spatial AI Engine Integration
 
-Not yet connected to a real API key. The `marble_world_id` and `marble_embed_url` fields are ready in the DB. Connect via environment variable `MARBLE_API_KEY` when available.
+The 3D generation engine is not yet connected. The `marble_world_id` and `marble_embed_url` DB fields are the integration hooks — kept as internal identifiers only. Connect via environment variable `SPATIAL_AI_API_KEY` when available. Vendor name must never appear in any customer-facing string.

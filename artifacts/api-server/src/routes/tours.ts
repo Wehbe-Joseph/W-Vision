@@ -161,7 +161,7 @@ async function simulateTourProcessing(tourId: string) {
     isAiGenerated: !r.isReal,
     confidenceScore: r.confidence,
     marbleWorldId: `world_${tourId}_${i}`,
-    marbleEmbedUrl: `https://worldlabs.ai/embed/demo_${i}`,
+    marbleEmbedUrl: null,
     thumbnailUrl: `https://images.unsplash.com/photo-${1560000000 + i * 100000}?w=400&q=60`,
   }));
 
