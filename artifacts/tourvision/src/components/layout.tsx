@@ -72,12 +72,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           </SheetContent>
         </Sheet>
       </header>
-
       {/* Desktop sidebar */}
       <aside className="hidden md:flex w-[240px] flex-col border-r border-border bg-card">
         <div className="p-6 border-b border-border flex items-center gap-2">
           <div className="w-4 h-4 rounded-full bg-primary" />
-          <span className="font-serif font-bold text-2xl tracking-tight">TourVision</span>
+          <span className="font-serif font-bold text-2xl tracking-tight">W Vision</span>
         </div>
         <div className="p-4 border-b border-border flex items-center gap-3">
           <Avatar className="h-10 w-10 border border-border">
@@ -107,7 +106,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           </Button>
         </div>
       </aside>
-
       <main className="flex-1 flex flex-col min-h-0 overflow-auto relative">
         {children}
       </main>
