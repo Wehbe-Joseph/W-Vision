@@ -93,7 +93,7 @@ export function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
           {/* Logo */}
           <div className="flex items-center gap-2 mb-14">
             <span className="w-2.5 h-2.5 bg-primary" />
-            <span className="font-serif text-xl tracking-tight">TOURVISION</span>
+            <span className="font-serif text-xl tracking-tight">WVISION</span>
           </div>
 
           {/* Heading */}

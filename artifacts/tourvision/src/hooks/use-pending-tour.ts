@@ -1,4 +1,4 @@
-const KEY = "tourvision_pending_tour";
+const KEY = "wvision_pending_tour";
 
 export interface PendingPhoto {
   name: string;

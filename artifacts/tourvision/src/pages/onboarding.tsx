@@ -123,7 +123,7 @@ export default function Onboarding() {
       {/* Logo */}
       <div className="absolute top-6 left-1/2 -translate-x-1/2 flex items-center gap-2">
         <div className="w-3 h-3 rounded-full bg-primary" />
-        <span className="font-display font-bold text-lg tracking-tight">TOURVISION</span>
+        <span className="font-display font-bold text-lg tracking-tight">WVISION</span>
       </div>
 
       <div className="w-full max-w-xl mt-8">
@@ -142,7 +142,7 @@ export default function Onboarding() {
                 className="p-8 sm:p-10 flex flex-col"
               >
                 <p className="text-xs font-mono text-muted-foreground uppercase tracking-widest mb-2">Step 1 of 2</p>
-                <h2 className="text-2xl font-display font-bold mb-1">What are you using TourVision for?</h2>
+                <h2 className="text-2xl font-display font-bold mb-1">What are you using WVISION for?</h2>
                 <p className="text-sm text-muted-foreground mb-7">We'll tailor your experience to your role.</p>
 
                 <div className="grid sm:grid-cols-2 gap-3 mb-8">

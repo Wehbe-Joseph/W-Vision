@@ -50,7 +50,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       <header className="md:hidden flex items-center justify-between px-4 py-3 border-b-2 border-foreground bg-card">
         <div className="flex items-center gap-2">
           <span className="w-2.5 h-2.5 bg-primary" />
-          <span className="font-serif text-xl tracking-tight">TOURVISION</span>
+          <span className="font-serif text-xl tracking-tight">WVISION</span>
         </div>
         <Sheet>
           <SheetTrigger asChild>
@@ -61,7 +61,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           <SheetContent side="left" className="bg-card w-[260px] p-0 flex flex-col border-r-2 border-foreground rounded-none">
             <div className="px-4 py-4 border-b-2 border-foreground flex items-center gap-2">
               <span className="w-2.5 h-2.5 bg-primary" />
-              <span className="font-serif text-xl tracking-tight">TOURVISION</span>
+              <span className="font-serif text-xl tracking-tight">WVISION</span>
             </div>
             <div className="px-4 py-3 border-b-2 border-foreground flex items-center gap-3">
               <Avatar className="h-9 w-9 rounded-none border-2 border-foreground">
@@ -92,7 +92,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         {/* Logo */}
         <div className="px-5 py-5 border-b-2 border-foreground flex items-center gap-2">
           <span className="w-3 h-3 bg-primary" />
-          <span className="font-serif text-2xl tracking-tight">TOURVISION</span>
+          <span className="font-serif text-2xl tracking-tight">WVISION</span>
         </div>
 
         {/* User */}

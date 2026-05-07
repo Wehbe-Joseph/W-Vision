@@ -129,7 +129,7 @@ export default function TourViewer() {
         {/* Bottom Bar */}
         <div className="p-4 flex justify-between items-end pointer-events-auto">
           <div className="bg-black/50 backdrop-blur border border-white/10 px-3 py-1.5 rounded text-xs font-serif font-bold text-white/60 flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-primary/60" /> TourVision
+            <div className="w-2 h-2 rounded-full bg-primary/60" /> WVISION
           </div>
 
           <div className="bg-black/70 backdrop-blur-md border border-white/10 p-3 rounded-xl flex items-center gap-4">

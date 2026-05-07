@@ -76,7 +76,7 @@ export default function Landing() {
           <div className="flex items-center gap-0">
             <div className="flex items-center gap-2 border-2 border-foreground px-3 py-1.5 mr-4">
               <span className="w-2 h-2 bg-primary" />
-              <span className="font-serif text-lg tracking-tight">TOURVISION</span>
+              <span className="font-serif text-lg tracking-tight">WVISION</span>
             </div>
             <div className="hidden md:flex items-center">
               <a href="#how-it-works" className="px-4 py-1.5 text-sm font-bold uppercase tracking-wide border-l-2 border-foreground hover:bg-accent transition-colors">How It Works</a>
@@ -302,7 +302,7 @@ export default function Landing() {
                 draggable={false}
               />
 
-              {/* TourVision OS window overlay — covers the Tavus window in the image */}
+              {/* WVISION OS window overlay — covers the center of the image */}
               <div
                 className="absolute hidden sm:flex flex-col border-2 border-foreground shadow-[8px_8px_0px_0px_#1A1714]"
                 style={{ left: "14%", width: "43%", top: "2%", bottom: "8%" }}
@@ -392,7 +392,7 @@ export default function Landing() {
                 Properties with 3D tours<br />sell 31% faster.
               </h2>
               <p className="text-base text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-                Whether you're a listing agent racing to close, or a buyer exploring from home — TourVision's
+                Whether you're a listing agent racing to close, or a buyer exploring from home — WVISION's
                 spatial AI gives every property the immersive presentation it deserves.
               </p>
             </motion.div>
@@ -640,9 +640,9 @@ export default function Landing() {
         <div className="mx-auto px-6 max-w-7xl flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2 font-serif text-lg">
             <span className="w-2.5 h-2.5 bg-primary" />
-            TOURVISION
+            WVISION
           </div>
-          <p className="text-sm text-muted-foreground font-mono">© {new Date().getFullYear()} TourVision. All rights reserved.</p>
+          <p className="text-sm text-muted-foreground font-mono">© {new Date().getFullYear()} WVISION. All rights reserved.</p>
           <div className="flex items-center gap-4 text-xs font-bold uppercase tracking-wide text-muted-foreground">
             <a href="#" className="hover:text-foreground">Privacy</a>
             <a href="#" className="hover:text-foreground">Terms</a>
