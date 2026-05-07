@@ -104,65 +104,77 @@ export default function Landing() {
         </div>
       </nav>
 
-      <main className="relative z-10 pt-20">
+      <main className="relative z-10">
 
         {/* ── HERO ── */}
-        <section className="mx-auto px-6 max-w-7xl pt-16 pb-20">
-          <div className="grid lg:grid-cols-2 gap-12 items-start">
+        <section className="relative min-h-screen flex items-center overflow-hidden pt-14">
+          {/* Animated sky background */}
+          <div className="absolute inset-0 z-0 hero-sky-bg overflow-hidden">
+            <div className="cloud cloud-1" />
+            <div className="cloud cloud-2" />
+            <div className="cloud cloud-3" />
+            <div className="cloud cloud-4" />
+            <div className="cloud cloud-5" />
+          </div>
+          {/* Subtle overlay so text reads clearly */}
+          <div className="absolute inset-0 z-[1] bg-background/5" />
+
+          <div className="relative z-[2] mx-auto px-6 max-w-7xl w-full py-20 grid lg:grid-cols-2 gap-16 items-center">
             {/* Left: copy */}
             <motion.div
               initial={{ opacity: 0, y: 24 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              className="flex flex-col gap-6"
+              transition={{ duration: 0.6 }}
+              className="flex flex-col gap-5"
             >
               <div className="inline-flex items-center gap-2">
-                <span className="w-2.5 h-2.5 bg-[#00C853]" />
+                <span className="w-2 h-2 bg-[#00C853]" />
                 <span className="text-xs font-mono font-bold uppercase tracking-widest">Next-Gen Spatial AI</span>
               </div>
 
-              <h1 className="text-6xl md:text-8xl font-serif leading-none tracking-tight">
-                ANY LISTING.<br />
-                <span className="text-primary">INSTANT</span><br />
-                3D TOUR.
+              <h1
+                className="text-5xl md:text-7xl leading-[1.05] tracking-tight text-foreground"
+                style={{ fontFamily: "'Playfair Display', serif", fontWeight: 700 }}
+              >
+                Any listing.<br />
+                Instant 3D tour.
               </h1>
 
-              <p className="text-base text-muted-foreground max-w-md leading-relaxed">
+              <p className="text-base text-foreground/70 max-w-md leading-relaxed">
                 Paste a listing URL or upload photos — our AI builds a photorealistic 3D walkthrough and gives you a shareable link in minutes.
               </p>
 
-              <div className="flex items-center gap-6 text-xs text-muted-foreground font-mono">
+              <div className="flex items-center gap-6 text-xs text-foreground/60 font-mono">
                 <span className="flex items-center gap-1.5"><ShieldCheck className="w-3.5 h-3.5" /> No credit card</span>
                 <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5" /> Free tour</span>
                 <span className="flex items-center gap-1.5"><Share2 className="w-3.5 h-3.5" /> Instant link</span>
               </div>
             </motion.div>
 
-            {/* Right: creation box (OS window style) */}
+            {/* Right: simplified input card */}
             <motion.div
               initial={{ opacity: 0, y: 32 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.55, delay: 0.1 }}
+              transition={{ duration: 0.6, delay: 0.12 }}
             >
               <div className="border-2 border-foreground shadow-[8px_8px_0px_0px_#1A1714] bg-card">
                 {/* Window title bar */}
-                <div className="flex items-center gap-2 px-4 py-2 border-b-2 border-foreground bg-foreground">
-                  <span className="w-2.5 h-2.5 bg-primary" />
+                <div className="flex items-center gap-2 px-4 py-2.5 border-b-2 border-foreground bg-foreground">
+                  <span className="w-2 h-2 bg-primary" />
                   <span className="text-xs font-mono font-bold uppercase tracking-widest text-background">Create 3D Tour</span>
                 </div>
 
-                <div className="grid md:grid-cols-[1fr_auto_1fr]">
-                  {/* Option A — URL */}
-                  <div className="p-5 flex flex-col gap-3">
-                    <div className="flex items-center gap-2">
-                      <span className="w-5 h-5 bg-foreground text-background text-xs font-bold flex items-center justify-center font-mono">A</span>
-                      <span className="text-sm font-bold uppercase tracking-wide">Paste listing URL</span>
-                    </div>
-                    <div className={`flex items-center gap-2 px-3 h-11 bg-background border-2 transition-all ${urlPasted ? "border-foreground" : "border-foreground/30 focus-within:border-foreground"}`}>
+                <div className="p-5 flex flex-col gap-4">
+                  {/* URL input */}
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-mono font-bold uppercase tracking-widest text-muted-foreground">
+                      Listing URL
+                    </label>
+                    <div className={`flex items-center gap-2 px-3 h-11 bg-background border-2 transition-all ${urlPasted ? "border-foreground" : "border-foreground/25 focus-within:border-foreground"}`}>
                       <LinkIcon className="w-4 h-4 text-muted-foreground shrink-0" />
                       <input
                         type="url"
-                        placeholder="https://zillow.com/..."
+                        placeholder="https://zillow.com/homedetails/…"
                         className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground font-mono"
                         value={url}
                         onChange={(e) => setUrl(e.target.value)}
@@ -174,116 +186,81 @@ export default function Landing() {
                       )}
                     </div>
                     <div className="flex items-center gap-2 text-xs text-muted-foreground font-mono">
-                      <SiZillow className="w-3.5 h-3.5" />
-                      <SiAirbnb className="w-3.5 h-3.5" />
-                      <span>Zillow, Airbnb, Bayut…</span>
+                      <SiZillow className="w-3 h-3" />
+                      <SiAirbnb className="w-3 h-3" />
+                      <span>Zillow, Airbnb, Bayut, Property Finder</span>
                     </div>
                   </div>
 
-                  {/* Divider */}
-                  <div className="hidden md:flex flex-col items-center justify-center px-2 gap-2 py-5">
-                    <div className="w-px flex-1 bg-foreground/20" />
-                    <span className="text-xs font-mono font-bold text-muted-foreground border border-foreground/20 px-1">OR</span>
-                    <div className="w-px flex-1 bg-foreground/20" />
-                  </div>
-                  <div className="md:hidden h-px bg-foreground/20 mx-5" />
-
-                  {/* Option B — Photos */}
-                  <div className="p-5 flex flex-col gap-3">
-                    <div className="flex items-center gap-2">
-                      <span className="w-5 h-5 bg-foreground text-background text-xs font-bold flex items-center justify-center font-mono">B</span>
-                      <span className="text-sm font-bold uppercase tracking-wide">Upload photos</span>
+                  {/* Photos — compact drag target */}
+                  <div
+                    className={`border-2 border-dashed cursor-pointer transition-all flex items-center gap-3 px-4 py-3 ${dragging ? "border-primary bg-primary/5" : hasPhotos ? "border-foreground bg-accent/30" : "border-foreground/25 hover:border-foreground"}`}
+                    onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+                    onDragLeave={() => setDragging(false)}
+                    onDrop={onDrop}
+                    onClick={() => fileRef.current?.click()}
+                  >
+                    <div className={`w-7 h-7 flex items-center justify-center shrink-0 ${hasPhotos ? "bg-[#00C853] text-white" : "bg-muted text-muted-foreground"}`}>
+                      {hasPhotos ? <CheckCircle2 className="w-4 h-4" /> : <ImagePlus className="w-4 h-4" />}
                     </div>
-                    <div
-                      className={`relative flex-1 min-h-[72px] border-2 border-dashed flex items-center justify-center cursor-pointer transition-all ${dragging ? "border-primary bg-primary/5" : "border-foreground/30 hover:border-foreground hover:bg-accent/30"}`}
-                      onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-                      onDragLeave={() => setDragging(false)}
-                      onDrop={onDrop}
-                      onClick={() => fileRef.current?.click()}
-                    >
-                      <div className="flex flex-col items-center gap-1 py-3 text-center">
-                        <div className={`w-8 h-8 flex items-center justify-center transition-colors ${hasPhotos ? "bg-[#00C853] text-white" : "bg-muted text-muted-foreground"}`}>
-                          {hasPhotos ? <CheckCircle2 className="w-4 h-4" /> : <ImagePlus className="w-4 h-4" />}
-                        </div>
-                        <p className="text-xs font-bold uppercase tracking-wide">
-                          {hasPhotos ? `${photos.length} photo${photos.length > 1 ? "s" : ""} added` : "Drag & drop or click"}
-                        </p>
-                        <p className="text-xs text-muted-foreground font-mono">Up to 20 photos</p>
-                      </div>
-                      <input ref={fileRef} type="file" multiple accept="image/*" className="hidden" onChange={(e) => addFiles(e.target.files)} />
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold uppercase tracking-wide">
+                        {hasPhotos ? `${photos.length} photo${photos.length > 1 ? "s" : ""} added` : "Add photos (optional)"}
+                      </p>
+                      <p className="text-xs text-muted-foreground font-mono">Drag & drop or click · up to 20 photos</p>
                     </div>
-                  </div>
-                </div>
-
-                {/* Photo thumbnails */}
-                <AnimatePresence>
-                  {hasPhotos && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: "auto", opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="border-t-2 border-foreground/20 overflow-hidden"
-                    >
-                      <div className="p-4 flex gap-2 flex-wrap">
-                        {photos.map((photo) => (
-                          <div key={photo.name} className="relative group w-14 h-14 overflow-hidden border-2 border-foreground shrink-0">
-                            <img src={photo.dataUrl} alt={photo.name} className="w-full h-full object-cover" />
-                            <button
-                              onClick={() => removePhoto(photo.name)}
-                              className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-                            >
-                              <X className="w-4 h-4 text-white" />
-                            </button>
-                          </div>
-                        ))}
-                        <button
-                          onClick={() => fileRef.current?.click()}
-                          className="w-14 h-14 border-2 border-dashed border-foreground/30 hover:border-foreground flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-                        >
-                          <Upload className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
-                {/* Suggestion */}
-                <AnimatePresence>
-                  {urlPasted && !hasPhotos && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: "auto", opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="border-t-2 border-foreground/20 overflow-hidden"
-                    >
-                      <div
-                        className="p-3 bg-[#00C853]/10 border-l-4 border-[#00C853] flex items-center gap-3 cursor-pointer hover:bg-[#00C853]/20 transition-colors"
-                        onClick={() => fileRef.current?.click()}
+                    {hasPhotos && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setPhotos([]); }}
+                        className="ml-auto text-muted-foreground hover:text-foreground"
                       >
-                        <Sparkles className="w-4 h-4 text-[#00C853] shrink-0" />
-                        <p className="text-sm font-bold flex-1 text-foreground">Add photos for a better 3D tour</p>
-                        <ChevronRight className="w-4 h-4 text-foreground shrink-0" />
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    <input ref={fileRef} type="file" multiple accept="image/*" className="hidden" onChange={(e) => addFiles(e.target.files)} />
+                  </div>
 
-                {/* Submit */}
-                <div className="p-4 border-t-2 border-foreground bg-background/50">
+                  {/* Photo thumbnails (compact row) */}
+                  <AnimatePresence>
+                    {hasPhotos && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="flex gap-1.5 flex-wrap">
+                          {photos.map((photo) => (
+                            <div key={photo.name} className="relative group w-12 h-12 overflow-hidden border border-foreground/40 shrink-0">
+                              <img src={photo.dataUrl} alt={photo.name} className="w-full h-full object-cover" />
+                              <button
+                                onClick={() => removePhoto(photo.name)}
+                                className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                              >
+                                <X className="w-3 h-3 text-white" />
+                              </button>
+                            </div>
+                          ))}
+                          <button
+                            onClick={() => fileRef.current?.click()}
+                            className="w-12 h-12 border border-dashed border-foreground/25 hover:border-foreground flex items-center justify-center text-muted-foreground"
+                          >
+                            <Upload className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {/* CTA */}
                   <button
                     onClick={handleCreate}
                     disabled={!canSubmit || submitting}
-                    className="w-full h-12 bg-primary text-white border-2 border-foreground text-base font-bold uppercase tracking-wide shadow-[4px_4px_0px_0px_#1A1714] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="w-full h-12 bg-primary text-white border-2 border-foreground text-sm font-bold uppercase tracking-widest shadow-[4px_4px_0px_0px_#1A1714] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {submitting ? "Redirecting…" : "Create 3D Tour →"}
                   </button>
-                  {!canSubmit && (
-                    <p className="text-center text-xs text-muted-foreground mt-2 font-mono">
-                      Paste a URL or upload photos to get started
-                    </p>
-                  )}
                 </div>
               </div>
             </motion.div>

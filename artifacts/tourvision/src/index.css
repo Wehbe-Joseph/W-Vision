@@ -132,6 +132,7 @@
   /* Fonts */
   --app-font-sans: 'Space Grotesk', sans-serif;
   --app-font-serif: 'Bebas Neue', sans-serif;
+  --app-font-display: 'Playfair Display', serif;
   --app-font-mono: 'Space Mono', monospace;
 
   /* Sharp corners — editorial style */
@@ -314,4 +315,117 @@
   .border.active-elevate-2:not(.no-active-interaction-elevate)::after {
     inset: -1px;
   }
+}
+
+/* ── Hero sky background ── */
+.hero-sky-bg {
+  background: linear-gradient(
+    180deg,
+    #6db8e4 0%,
+    #88cbee 25%,
+    #a4d8f0 55%,
+    #bce3f4 80%,
+    #cce9f5 100%
+  );
+}
+
+@keyframes cloud-drift {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(120vw); }
+}
+
+.cloud {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.82);
+  border-radius: 50px;
+  filter: blur(8px);
+  animation: cloud-drift linear infinite;
+}
+
+.cloud::before,
+.cloud::after {
+  content: "";
+  position: absolute;
+  background: rgba(255, 255, 255, 0.82);
+  border-radius: 50%;
+}
+
+.cloud-1 {
+  width: 260px; height: 60px;
+  top: 12%;  left: -280px;
+  animation-duration: 60s;
+  animation-delay: 0s;
+  opacity: 0.9;
+}
+.cloud-1::before {
+  width: 110px; height: 80px;
+  top: -40px; left: 50px;
+}
+.cloud-1::after {
+  width: 80px; height: 65px;
+  top: -30px; left: 130px;
+}
+
+.cloud-2 {
+  width: 200px; height: 48px;
+  top: 28%;  left: -220px;
+  animation-duration: 80s;
+  animation-delay: -20s;
+  opacity: 0.75;
+}
+.cloud-2::before {
+  width: 90px; height: 65px;
+  top: -35px; left: 40px;
+}
+.cloud-2::after {
+  width: 65px; height: 52px;
+  top: -28px; left: 110px;
+}
+
+.cloud-3 {
+  width: 320px; height: 70px;
+  top: 8%;   left: -340px;
+  animation-duration: 95s;
+  animation-delay: -45s;
+  opacity: 0.65;
+}
+.cloud-3::before {
+  width: 130px; height: 95px;
+  top: -50px; left: 60px;
+}
+.cloud-3::after {
+  width: 100px; height: 80px;
+  top: -42px; left: 160px;
+}
+
+.cloud-4 {
+  width: 180px; height: 42px;
+  top: 55%;  left: -200px;
+  animation-duration: 70s;
+  animation-delay: -10s;
+  opacity: 0.55;
+}
+.cloud-4::before {
+  width: 75px; height: 55px;
+  top: -28px; left: 35px;
+}
+.cloud-4::after {
+  width: 55px; height: 44px;
+  top: -22px; left: 95px;
+}
+
+.cloud-5 {
+  width: 240px; height: 55px;
+  top: 72%;  left: -260px;
+  animation-duration: 85s;
+  animation-delay: -60s;
+  opacity: 0.5;
+}
+.cloud-5::before {
+  width: 100px; height: 72px;
+  top: -38px; left: 45px;
+}
+.cloud-5::after {
+  width: 75px; height: 58px;
+  top: -30px; left: 130px;
 }
