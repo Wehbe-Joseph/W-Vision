@@ -87,7 +87,7 @@ function mapRoom(p: typeof tourPhotosTable.$inferSelect) {
 // POST /tours — create tour
 router.post("/tours", async (req, res) => {
   try {
-    const userId = req.headers["x-user-id"] as string;
+    const userId = (req.user as { profileId?: string } | undefined)?.profileId ?? (req.headers["x-user-id"] as string | undefined);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
     const parsed = CreateTourBody.safeParse(req.body);
@@ -206,7 +206,7 @@ async function simulateTourProcessing(tourId: string) {
 // GET /tours — list tours
 router.get("/tours", async (req, res) => {
   try {
-    const userId = req.headers["x-user-id"] as string;
+    const userId = (req.user as { profileId?: string } | undefined)?.profileId ?? (req.headers["x-user-id"] as string | undefined);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
     const parsed = ListToursQueryParams.safeParse(req.query);
@@ -260,7 +260,7 @@ router.get("/tours", async (req, res) => {
 // GET /tours/recent
 router.get("/tours/recent", async (req, res) => {
   try {
-    const userId = req.headers["x-user-id"] as string;
+    const userId = (req.user as { profileId?: string } | undefined)?.profileId ?? (req.headers["x-user-id"] as string | undefined);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
     const tours = await db
@@ -280,7 +280,7 @@ router.get("/tours/recent", async (req, res) => {
 // GET /tours/stats
 router.get("/tours/stats", async (req, res) => {
   try {
-    const userId = req.headers["x-user-id"] as string;
+    const userId = (req.user as { profileId?: string } | undefined)?.profileId ?? (req.headers["x-user-id"] as string | undefined);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
     const profile = await db.query.profilesTable.findFirst({
@@ -313,7 +313,7 @@ router.get("/tours/stats", async (req, res) => {
 // GET /tours/:tourId
 router.get("/tours/:tourId", async (req, res) => {
   try {
-    const userId = req.headers["x-user-id"] as string;
+    const userId = (req.user as { profileId?: string } | undefined)?.profileId ?? (req.headers["x-user-id"] as string | undefined);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
     const tour = await db.query.toursTable.findFirst({
@@ -332,7 +332,7 @@ router.get("/tours/:tourId", async (req, res) => {
 // DELETE /tours/:tourId
 router.delete("/tours/:tourId", async (req, res) => {
   try {
-    const userId = req.headers["x-user-id"] as string;
+    const userId = (req.user as { profileId?: string } | undefined)?.profileId ?? (req.headers["x-user-id"] as string | undefined);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
     await db
@@ -349,7 +349,7 @@ router.delete("/tours/:tourId", async (req, res) => {
 // GET /tours/:tourId/status
 router.get("/tours/:tourId/status", async (req, res) => {
   try {
-    const userId = req.headers["x-user-id"] as string;
+    const userId = (req.user as { profileId?: string } | undefined)?.profileId ?? (req.headers["x-user-id"] as string | undefined);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
     const tour = await db.query.toursTable.findFirst({
@@ -392,7 +392,7 @@ router.get("/tours/:tourId/status", async (req, res) => {
 // GET /tours/:tourId/rooms
 router.get("/tours/:tourId/rooms", async (req, res) => {
   try {
-    const userId = req.headers["x-user-id"] as string;
+    const userId = (req.user as { profileId?: string } | undefined)?.profileId ?? (req.headers["x-user-id"] as string | undefined);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
     const tour = await db.query.toursTable.findFirst({
@@ -417,7 +417,7 @@ router.get("/tours/:tourId/rooms", async (req, res) => {
 // PUT /tours/:tourId/rooms — update floor assignments
 router.put("/tours/:tourId/rooms", async (req, res) => {
   try {
-    const userId = req.headers["x-user-id"] as string;
+    const userId = (req.user as { profileId?: string } | undefined)?.profileId ?? (req.headers["x-user-id"] as string | undefined);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
     const parsed = UpdateTourRoomFloorsBody.safeParse(req.body);
@@ -440,7 +440,7 @@ router.put("/tours/:tourId/rooms", async (req, res) => {
 // PUT /tours/:tourId/floors
 router.put("/tours/:tourId/floors", async (req, res) => {
   try {
-    const userId = req.headers["x-user-id"] as string;
+    const userId = (req.user as { profileId?: string } | undefined)?.profileId ?? (req.headers["x-user-id"] as string | undefined);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
     const parsed = SetTourFloorCountBody.safeParse(req.body);

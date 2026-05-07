@@ -17,7 +17,7 @@ const TOUR_LIMITS: Record<string, number> = {
 
 router.get("/user/profile", async (req, res) => {
   try {
-    const userId = req.headers["x-user-id"] as string;
+    const userId = (req.user as { profileId?: string } | undefined)?.profileId ?? (req.headers["x-user-id"] as string | undefined);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
     let profile = await db.query.profilesTable.findFirst({
@@ -59,7 +59,7 @@ router.get("/user/profile", async (req, res) => {
 
 router.put("/user/profile", async (req, res) => {
   try {
-    const userId = req.headers["x-user-id"] as string;
+    const userId = (req.user as { profileId?: string } | undefined)?.profileId ?? (req.headers["x-user-id"] as string | undefined);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
     const parsed = UpdateUserProfileBody.safeParse(req.body);
@@ -96,7 +96,7 @@ router.put("/user/profile", async (req, res) => {
 
 router.get("/user/limits", async (req, res) => {
   try {
-    const userId = req.headers["x-user-id"] as string;
+    const userId = (req.user as { profileId?: string } | undefined)?.profileId ?? (req.headers["x-user-id"] as string | undefined);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
     const profile = await db.query.profilesTable.findFirst({
@@ -174,7 +174,7 @@ router.post("/user/onboarding", async (req, res) => {
       await db
         .update(profilesTable)
         .set({ onboardingCompleted: true, updatedAt: new Date() })
-        .where(eq(profilesTable.id, req.user.id));
+        .where(eq(profilesTable.id, (req.user as { profileId?: string }).profileId ?? req.user.id));
     } catch {
       // Profile may not exist yet — that's fine
     }

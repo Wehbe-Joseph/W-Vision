@@ -6,7 +6,8 @@ import {
   ExchangeMobileAuthorizationCodeResponse,
   LogoutMobileSessionResponse,
 } from "@workspace/api-zod";
-import { db, usersTable } from "@workspace/db";
+import { db, usersTable, profilesTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 import {
   clearSession,
   getOidcConfig,
@@ -57,9 +58,10 @@ function getSafeReturnTo(value: unknown): string {
   return value;
 }
 
-async function upsertUser(claims: Record<string, unknown>) {
+async function upsertUser(claims: Record<string, unknown>): Promise<{ user: typeof usersTable.$inferSelect; profileId: string }> {
+  const replitUserId = claims.sub as string;
   const userData = {
-    id: claims.sub as string,
+    id: replitUserId,
     email: (claims.email as string) || null,
     firstName: (claims.first_name as string) || null,
     lastName: (claims.last_name as string) || null,
@@ -79,7 +81,32 @@ async function upsertUser(claims: Record<string, unknown>) {
       },
     })
     .returning();
-  return user;
+
+  // Upsert a linked profile row so routes can use a stable UUID for this user
+  const profileData = {
+    replitUserId,
+    fullName: [userData.firstName, userData.lastName].filter(Boolean).join(" ") || "",
+    email: userData.email ?? "",
+    avatarUrl: userData.profileImageUrl ?? null,
+  };
+
+  let profile = await db.query.profilesTable.findFirst({
+    where: eq(profilesTable.replitUserId, replitUserId),
+  });
+
+  if (!profile) {
+    const [inserted] = await db
+      .insert(profilesTable)
+      .values(profileData)
+      .onConflictDoUpdate({
+        target: profilesTable.replitUserId,
+        set: { fullName: profileData.fullName, email: profileData.email, avatarUrl: profileData.avatarUrl },
+      })
+      .returning();
+    profile = inserted;
+  }
+
+  return { user, profileId: profile.id };
 }
 
 router.get("/auth/user", (req: Request, res: Response) => {
@@ -164,7 +191,7 @@ router.get("/callback", async (req: Request, res: Response) => {
     return;
   }
 
-  const dbUser = await upsertUser(
+  const { user: dbUser, profileId } = await upsertUser(
     claims as unknown as Record<string, unknown>,
   );
 
@@ -172,6 +199,7 @@ router.get("/callback", async (req: Request, res: Response) => {
   const sessionData: SessionData = {
     user: {
       id: dbUser.id,
+      profileId,
       email: dbUser.email,
       firstName: dbUser.firstName,
       lastName: dbUser.lastName,
@@ -234,7 +262,7 @@ router.post(
         return;
       }
 
-      const dbUser = await upsertUser(
+      const { user: dbUser, profileId } = await upsertUser(
         claims as unknown as Record<string, unknown>,
       );
 
@@ -242,6 +270,7 @@ router.post(
       const sessionData: SessionData = {
         user: {
           id: dbUser.id,
+          profileId,
           email: dbUser.email,
           firstName: dbUser.firstName,
           lastName: dbUser.lastName,

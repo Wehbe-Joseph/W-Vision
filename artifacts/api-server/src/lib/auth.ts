@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 
 export interface AuthUser {
   id: string;
+  profileId?: string;
   email?: string | null;
   firstName?: string | null;
   lastName?: string | null;

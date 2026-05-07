@@ -38,7 +38,7 @@ router.post("/tours/:tourId/lead", async (req, res) => {
 // GET /leads
 router.get("/leads", async (req, res) => {
   try {
-    const userId = req.headers["x-user-id"] as string;
+    const userId = (req.user as { profileId?: string } | undefined)?.profileId ?? (req.headers["x-user-id"] as string | undefined);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
     const leads = await db
