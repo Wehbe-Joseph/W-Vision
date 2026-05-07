@@ -26,14 +26,8 @@ export default function DashboardHome() {
   return (
     <div className="p-6 max-w-6xl mx-auto w-full space-y-8">
       <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-serif font-bold">Good morning, {user?.name?.split(' ')[0] || 'Agent'}</h1>
+        <h1 className="text-3xl font-serif font-bold">Good morning, {user?.firstName || 'Agent'}</h1>
         <p className="text-muted-foreground">You have 11 tours remaining this month.</p>
-        {user?.subscriptionTier === 'free' && (
-          <div className="mt-2 bg-primary/10 border border-primary/20 text-primary px-4 py-3 rounded-lg flex items-center justify-between">
-            <span className="text-sm font-medium">Upgrade to Pro for priority processing and analytics.</span>
-            <Button variant="outline" className="border-primary text-primary hover:bg-primary/20 h-8">Upgrade Now</Button>
-          </div>
-        )}
       </div>
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">

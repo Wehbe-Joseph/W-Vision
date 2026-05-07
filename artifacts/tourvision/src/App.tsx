@@ -24,7 +24,8 @@ function PublicRoute({ component: Component }: { component: any }) {
 }
 
 function ProtectedRoute({ component: Component }: { component: any }) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
+  if (isLoading) return null;
   if (!isAuthenticated) return <Redirect to="/login" />;
   return <DashboardLayout><Component /></DashboardLayout>;
 }
