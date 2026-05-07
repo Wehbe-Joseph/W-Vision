@@ -56,6 +56,10 @@ function mapTour(t: typeof toursTable.$inferSelect) {
     thumbnailUrl: t.thumbnailUrl,
     viewCount: t.viewCount,
     errorMessage: t.errorMessage,
+    generationStatus: t.generationStatus,
+    worldlabsJobId: t.worldlabsJobId,
+    generatedTourUrl: t.generatedTourUrl,
+    previewImageUrl: t.previewImageUrl,
     processingStartedAt: t.processingStartedAt?.toISOString() ?? null,
     processingCompletedAt: t.processingCompletedAt?.toISOString() ?? null,
     createdAt: t.createdAt.toISOString(),
@@ -359,14 +363,25 @@ router.get("/tours/:tourId/status", async (req, res) => {
       .from(tourPhotosTable)
       .where(and(eq(tourPhotosTable.tourId, tour.id), eq(tourPhotosTable.isBestForRoom, true)));
 
+    const estimatedMinutes: Record<string, number> = {
+      queued: 5,
+      processing: 3,
+      completed: 0,
+      failed: 0,
+    };
+    const genStatus = tour.generationStatus ?? "queued";
+
     return res.json({
       status: tour.status,
+      generationStatus: genStatus,
       currentStage: tour.currentStage,
       roomsCompleted: rooms.filter((r) => r.marbleWorldId).length,
       roomsTotal: tour.roomsDetected || rooms.length,
-      estimatedMinutes: 24,
+      estimatedMinutes: estimatedMinutes[genStatus] ?? 3,
       confidenceScore: tour.confidenceScore,
       errorMessage: tour.errorMessage,
+      generatedTourUrl: tour.generatedTourUrl,
+      previewImageUrl: tour.previewImageUrl ?? tour.thumbnailUrl,
     });
   } catch (err) {
     req.log.error(err);

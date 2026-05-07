@@ -35,6 +35,12 @@ export const toursTable = pgTable("tours", {
   processingCompletedAt: timestamp("processing_completed_at"),
   emailSent: boolean("email_sent").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  // WorldLabs generation fields
+  generationStatus: text("generation_status").notNull().default("queued"),
+  worldlabsJobId: text("worldlabs_job_id"),
+  generatedTourUrl: text("generated_tour_url"),
+  previewImageUrl: text("preview_image_url"),
+  generationRetries: integer("generation_retries").notNull().default(0),
 });
 
 export const insertTourSchema = createInsertSchema(toursTable).omit({ id: true, createdAt: true });

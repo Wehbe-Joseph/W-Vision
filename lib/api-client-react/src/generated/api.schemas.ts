@@ -268,14 +268,57 @@ export interface CreateTourResponse {
   shareToken: string;
 }
 
+export type GenerateTourBodyUploadedImagesItem = {
+  name: string;
+  dataUrl: string;
+};
+
+export interface GenerateTourBody {
+  listingUrl: string;
+  imageUrls?: string[];
+  uploadedImages?: GenerateTourBodyUploadedImagesItem[];
+  floorCount?: number;
+}
+
+export interface GenerateTourResponse {
+  tourId: string;
+  shareToken: string;
+}
+
+export type GenerationStatusGenerationStatus =
+  (typeof GenerationStatusGenerationStatus)[keyof typeof GenerationStatusGenerationStatus];
+
+export const GenerationStatusGenerationStatus = {
+  queued: "queued",
+  processing: "processing",
+  completed: "completed",
+  failed: "failed",
+} as const;
+
+export interface GenerationStatus {
+  status: string;
+  generationStatus: GenerationStatusGenerationStatus;
+  currentStage?: string | null;
+  estimatedMinutes: number;
+  worldlabsJobId?: string | null;
+  generatedTourUrl?: string | null;
+  previewImageUrl?: string | null;
+  errorMessage?: string | null;
+  confidenceScore: number;
+  roomsDetected?: number | null;
+}
+
 export interface TourStatus {
   status: string;
+  generationStatus?: string | null;
   currentStage?: string | null;
   roomsCompleted: number;
   roomsTotal: number;
   estimatedMinutes: number;
   confidenceScore: number;
   errorMessage?: string | null;
+  generatedTourUrl?: string | null;
+  previewImageUrl?: string | null;
 }
 
 export interface TourStats {

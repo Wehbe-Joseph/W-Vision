@@ -171,6 +171,52 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /generate-tour:
+    post:
+      operationId: generateTour
+      tags: [tours]
+      summary: Create a tour and start WorldLabs 3D generation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateTourBody"
+      responses:
+        "200":
+          description: Tour created and generation started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenerateTourResponse"
+        "403":
+          description: Tour limit reached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /generate-tour/{tourId}/status:
+    get:
+      operationId: getGenerationStatus
+      tags: [tours]
+      summary: Get real-time generation status for a tour
+      parameters:
+        - name: tourId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Generation status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenerationStatus"
+        "404":
+          description: Tour not found
+
   /tours/recent:
     get:
       operationId: getRecentTours
@@ -989,11 +1035,87 @@ components:
         - tourId
         - shareToken
 
+    GenerateTourBody:
+      type: object
+      properties:
+        listingUrl:
+          type: string
+        imageUrls:
+          type: array
+          items:
+            type: string
+        uploadedImages:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              dataUrl:
+                type: string
+            required:
+              - name
+              - dataUrl
+        floorCount:
+          type: integer
+      required:
+        - listingUrl
+
+    GenerateTourResponse:
+      type: object
+      properties:
+        tourId:
+          type: string
+        shareToken:
+          type: string
+      required:
+        - tourId
+        - shareToken
+
+    GenerationStatus:
+      type: object
+      properties:
+        status:
+          type: string
+        generationStatus:
+          type: string
+          enum: [queued, processing, completed, failed]
+        currentStage:
+          type: string
+          nullable: true
+        estimatedMinutes:
+          type: integer
+        worldlabsJobId:
+          type: string
+          nullable: true
+        generatedTourUrl:
+          type: string
+          nullable: true
+        previewImageUrl:
+          type: string
+          nullable: true
+        errorMessage:
+          type: string
+          nullable: true
+        confidenceScore:
+          type: number
+        roomsDetected:
+          type: integer
+          nullable: true
+      required:
+        - status
+        - generationStatus
+        - estimatedMinutes
+        - confidenceScore
+
     TourStatus:
       type: object
       properties:
         status:
           type: string
+        generationStatus:
+          type: string
+          nullable: true
         currentStage:
           type: string
           nullable: true
@@ -1006,6 +1128,12 @@ components:
         confidenceScore:
           type: number
         errorMessage:
+          type: string
+          nullable: true
+        generatedTourUrl:
+          type: string
+          nullable: true
+        previewImageUrl:
           type: string
           nullable: true
       required:

@@ -26,6 +26,9 @@ import type {
   ErrorEnvelope,
   ErrorResponse,
   FlagAngleBody,
+  GenerateTourBody,
+  GenerateTourResponse,
+  GenerationStatus,
   HandleBrowserLoginCallbackParams,
   HealthStatus,
   LeadsListResponse,
@@ -710,6 +713,181 @@ export const useCreateTour = <
 > => {
   return useMutation(getCreateTourMutationOptions(options));
 };
+
+/**
+ * @summary Create a tour and start WorldLabs 3D generation
+ */
+export const getGenerateTourUrl = () => {
+  return `/api/generate-tour`;
+};
+
+export const generateTour = async (
+  generateTourBody: GenerateTourBody,
+  options?: RequestInit,
+): Promise<GenerateTourResponse> => {
+  return customFetch<GenerateTourResponse>(getGenerateTourUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(generateTourBody),
+  });
+};
+
+export const getGenerateTourMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateTour>>,
+    TError,
+    { data: BodyType<GenerateTourBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof generateTour>>,
+  TError,
+  { data: BodyType<GenerateTourBody> },
+  TContext
+> => {
+  const mutationKey = ["generateTour"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof generateTour>>,
+    { data: BodyType<GenerateTourBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return generateTour(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type GenerateTourMutationResult = NonNullable<
+  Awaited<ReturnType<typeof generateTour>>
+>;
+export type GenerateTourMutationBody = BodyType<GenerateTourBody>;
+export type GenerateTourMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Create a tour and start WorldLabs 3D generation
+ */
+export const useGenerateTour = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateTour>>,
+    TError,
+    { data: BodyType<GenerateTourBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof generateTour>>,
+  TError,
+  { data: BodyType<GenerateTourBody> },
+  TContext
+> => {
+  return useMutation(getGenerateTourMutationOptions(options));
+};
+
+/**
+ * @summary Get real-time generation status for a tour
+ */
+export const getGetGenerationStatusUrl = (tourId: string) => {
+  return `/api/generate-tour/${tourId}/status`;
+};
+
+export const getGenerationStatus = async (
+  tourId: string,
+  options?: RequestInit,
+): Promise<GenerationStatus> => {
+  return customFetch<GenerationStatus>(getGetGenerationStatusUrl(tourId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetGenerationStatusQueryKey = (tourId: string) => {
+  return [`/api/generate-tour/${tourId}/status`] as const;
+};
+
+export const getGetGenerationStatusQueryOptions = <
+  TData = Awaited<ReturnType<typeof getGenerationStatus>>,
+  TError = ErrorType<void>,
+>(
+  tourId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getGenerationStatus>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetGenerationStatusQueryKey(tourId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getGenerationStatus>>
+  > = ({ signal }) =>
+    getGenerationStatus(tourId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!tourId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getGenerationStatus>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetGenerationStatusQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getGenerationStatus>>
+>;
+export type GetGenerationStatusQueryError = ErrorType<void>;
+
+/**
+ * @summary Get real-time generation status for a tour
+ */
+
+export function useGetGenerationStatus<
+  TData = Awaited<ReturnType<typeof getGenerationStatus>>,
+  TError = ErrorType<void>,
+>(
+  tourId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getGenerationStatus>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetGenerationStatusQueryOptions(tourId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Get recent tours (last 5) for dashboard

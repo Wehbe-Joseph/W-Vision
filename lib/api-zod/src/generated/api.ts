@@ -183,6 +183,48 @@ export const CreateTourResponse = zod.object({
 });
 
 /**
+ * @summary Create a tour and start WorldLabs 3D generation
+ */
+export const GenerateTourBody = zod.object({
+  listingUrl: zod.string(),
+  imageUrls: zod.array(zod.string()).optional(),
+  uploadedImages: zod
+    .array(
+      zod.object({
+        name: zod.string(),
+        dataUrl: zod.string(),
+      }),
+    )
+    .optional(),
+  floorCount: zod.number().optional(),
+});
+
+export const GenerateTourResponse = zod.object({
+  tourId: zod.string(),
+  shareToken: zod.string(),
+});
+
+/**
+ * @summary Get real-time generation status for a tour
+ */
+export const GetGenerationStatusParams = zod.object({
+  tourId: zod.coerce.string(),
+});
+
+export const GetGenerationStatusResponse = zod.object({
+  status: zod.string(),
+  generationStatus: zod.enum(["queued", "processing", "completed", "failed"]),
+  currentStage: zod.string().nullish(),
+  estimatedMinutes: zod.number(),
+  worldlabsJobId: zod.string().nullish(),
+  generatedTourUrl: zod.string().nullish(),
+  previewImageUrl: zod.string().nullish(),
+  errorMessage: zod.string().nullish(),
+  confidenceScore: zod.number(),
+  roomsDetected: zod.number().nullish(),
+});
+
+/**
  * @summary Get recent tours (last 5) for dashboard
  */
 export const GetRecentToursResponse = zod.object({
@@ -313,12 +355,15 @@ export const GetTourStatusParams = zod.object({
 
 export const GetTourStatusResponse = zod.object({
   status: zod.string(),
+  generationStatus: zod.string().nullish(),
   currentStage: zod.string().nullish(),
   roomsCompleted: zod.number(),
   roomsTotal: zod.number(),
   estimatedMinutes: zod.number(),
   confidenceScore: zod.number(),
   errorMessage: zod.string().nullish(),
+  generatedTourUrl: zod.string().nullish(),
+  previewImageUrl: zod.string().nullish(),
 });
 
 /**
