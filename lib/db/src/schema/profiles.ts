@@ -4,7 +4,7 @@ import { z } from "zod/v4";
 
 export const profilesTable = pgTable("profiles", {
   id: uuid("id").primaryKey().defaultRandom(),
-  replitUserId: text("replit_user_id").unique(),
+  replitUserId: text("replit_user_id").notNull().unique(),
   fullName: text("full_name").notNull().default(""),
   email: text("email").notNull().default(""),
   avatarUrl: text("avatar_url"),
