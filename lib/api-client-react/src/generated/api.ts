@@ -35,6 +35,7 @@ import type {
   MobileTokenExchangeSuccess,
   NewsletterSubscribeBody,
   OnboardingBody,
+  OnboardingStatus,
   PublicTour,
   SetFloorCountBody,
   SuccessResponse,
@@ -361,6 +362,81 @@ export function useGetUserLimits<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetUserLimitsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Check if the current user has completed onboarding
+ */
+export const getGetOnboardingStatusUrl = () => {
+  return `/api/user/onboarding-status`;
+};
+
+export const getOnboardingStatus = async (
+  options?: RequestInit,
+): Promise<OnboardingStatus> => {
+  return customFetch<OnboardingStatus>(getGetOnboardingStatusUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetOnboardingStatusQueryKey = () => {
+  return [`/api/user/onboarding-status`] as const;
+};
+
+export const getGetOnboardingStatusQueryOptions = <
+  TData = Awaited<ReturnType<typeof getOnboardingStatus>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getOnboardingStatus>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetOnboardingStatusQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getOnboardingStatus>>
+  > = ({ signal }) => getOnboardingStatus({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getOnboardingStatus>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetOnboardingStatusQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getOnboardingStatus>>
+>;
+export type GetOnboardingStatusQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Check if the current user has completed onboarding
+ */
+
+export function useGetOnboardingStatus<
+  TData = Awaited<ReturnType<typeof getOnboardingStatus>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getOnboardingStatus>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetOnboardingStatusQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

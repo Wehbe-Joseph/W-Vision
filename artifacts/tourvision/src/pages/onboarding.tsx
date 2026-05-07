@@ -2,222 +2,212 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useCompleteOnboarding } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
-import { Building2, Home, Briefcase, MapPin, Link2 } from "lucide-react";
+import {
+  Building2, Home, Pencil, Code2, HelpCircle,
+  MessageCircle, Music2, Youtube, Search, Users, Smile, CheckCircle2, ArrowRight
+} from "lucide-react";
+import { loadPendingTour, clearPendingTour } from "@/hooks/use-pending-tour";
 
-const variants = {
-  enter: (direction: number) => ({ x: direction > 0 ? 50 : -50, opacity: 0 }),
+const slide = {
+  enter: (d: number) => ({ x: d > 0 ? 60 : -60, opacity: 0 }),
   center: { x: 0, opacity: 1 },
-  exit: (direction: number) => ({ x: direction < 0 ? 50 : -50, opacity: 0 })
+  exit: (d: number) => ({ x: d < 0 ? 60 : -60, opacity: 0 }),
 };
+
+const ROLES = [
+  { id: "real_estate_agent", label: "Real Estate Agent", icon: Building2 },
+  { id: "airbnb_host",       label: "Airbnb Host",        icon: Home },
+  { id: "architect_designer", label: "Architect / Designer", icon: Pencil },
+  { id: "developer",         label: "Developer",           icon: Code2 },
+  { id: "other",             label: "Other",               icon: HelpCircle },
+];
+
+const SOURCES = [
+  { id: "reddit",   label: "Reddit",    icon: MessageCircle },
+  { id: "tiktok",   label: "TikTok",    icon: Music2 },
+  { id: "youtube",  label: "YouTube",   icon: Youtube },
+  { id: "google",   label: "Google",    icon: Search },
+  { id: "friend",   label: "A Friend",  icon: Users },
+  { id: "other",    label: "Other",     icon: Smile },
+];
+
+function SelectCard<T extends string>({
+  item,
+  selected,
+  onSelect,
+}: {
+  item: { id: T; label: string; icon: React.ComponentType<{ className?: string }> };
+  selected: boolean;
+  onSelect: (id: T) => void;
+}) {
+  return (
+    <button
+      onClick={() => onSelect(item.id)}
+      className={`flex items-center gap-4 p-4 rounded-xl border-2 text-left transition-all font-medium text-sm w-full ${
+        selected
+          ? "border-primary bg-primary text-primary-foreground shadow-md scale-[1.01]"
+          : "border-border bg-background hover:border-primary/40 hover:bg-accent"
+      }`}
+    >
+      <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${selected ? "bg-primary-foreground/20" : "bg-muted"}`}>
+        <item.icon className="w-4 h-4" />
+      </div>
+      {item.label}
+    </button>
+  );
+}
 
 export default function Onboarding() {
   const [step, setStep] = useState(1);
-  const [direction, setDirection] = useState(1);
+  const [dir, setDir] = useState(1);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const completeMutation = useCompleteOnboarding();
 
-  // Form state
-  const [accountType, setAccountType] = useState("agent");
-  const [country, setCountry] = useState("");
-  const [whatsapp, setWhatsapp] = useState("");
-  const [url, setUrl] = useState("");
+  const [useCase, setUseCase] = useState<string>("");
+  const [referralSource, setReferralSource] = useState<string>("");
+  const [saving, setSaving] = useState(false);
 
-  const nextStep = () => {
-    if (step === 1 && !accountType) return;
-    if (step === 2 && !country) return;
-    setDirection(1);
-    setStep(s => s + 1);
+  const go = (next: number) => {
+    setDir(next > step ? 1 : -1);
+    setStep(next);
   };
 
   const finish = async () => {
+    setSaving(true);
     try {
-      await completeMutation.mutateAsync({
-        data: {
-          accountType: accountType as any,
-          country,
-          whatsappNumber: whatsapp
-        }
+      const res = await fetch("/api/user/onboarding", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ useCase, referralSource }),
       });
-      // Mock login since we don't have real auth hooked to API
-      const mockUser = { id: "1", name: "Agent Smith", email: "agent@example.com", subscriptionTier: "pro" };
-      localStorage.setItem("tourvision_user", JSON.stringify(mockUser));
-      
-      toast({ title: "Setup complete!", description: "Welcome to TourVision." });
-      
-      if (url) {
-        // In a real app we might pass this URL to the new-tour flow via state/params
-        setLocation("/dashboard/new-tour");
-      } else {
-        setLocation("/dashboard");
-      }
-    } catch (e) {
-      toast({ title: "Error", description: "Failed to complete setup.", variant: "destructive" });
+      if (!res.ok) throw new Error("Failed");
+    } catch {
+      toast({ title: "Couldn't save answers", description: "Continuing anyway…", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+
+    const pending = loadPendingTour();
+    if (pending?.url || pending?.photos?.length) {
+      setLocation("/dashboard/new-tour");
+    } else {
       setLocation("/dashboard");
     }
   };
 
+  const skip = () => {
+    const pending = loadPendingTour();
+    if (pending?.url || pending?.photos?.length) {
+      setLocation("/dashboard/new-tour");
+    } else {
+      setLocation("/dashboard");
+    }
+  };
+
+  const totalSteps = 2;
+  const progress = ((step - 1) / totalSteps) * 100;
+
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 relative overflow-hidden">
-      <div className="absolute top-0 left-0 w-full h-1 bg-card">
-        <motion.div 
-          className="h-full bg-primary" 
-          initial={{ width: "33%" }}
-          animate={{ width: `${(step / 3) * 100}%` }}
-          transition={{ duration: 0.3 }}
+      {/* Progress bar */}
+      <div className="absolute top-0 left-0 right-0 h-1 bg-border">
+        <motion.div
+          className="h-full bg-primary"
+          animate={{ width: `${step === 3 ? 100 : progress}%` }}
+          transition={{ duration: 0.4, ease: "easeInOut" }}
         />
       </div>
 
-      <div className="w-full max-w-2xl">
-        <div className="flex items-center gap-2 mb-12 justify-center">
-          <div className="w-3 h-3 rounded-full bg-primary" />
-          <span className="font-serif font-bold text-xl tracking-tight">TourVision</span>
-        </div>
+      {/* Logo */}
+      <div className="absolute top-6 left-1/2 -translate-x-1/2 flex items-center gap-2">
+        <div className="w-3 h-3 rounded-full bg-primary" />
+        <span className="font-display font-bold text-lg tracking-tight">TOURVISION</span>
+      </div>
 
-        <div className="bg-card border border-border rounded-2xl shadow-xl overflow-hidden relative min-h-[400px]">
-          <AnimatePresence mode="wait" custom={direction}>
+      <div className="w-full max-w-xl mt-8">
+        <div className="bg-card border border-border rounded-2xl shadow-xl overflow-hidden relative" style={{ minHeight: 420 }}>
+          <AnimatePresence mode="wait" custom={dir}>
+            {/* Step 1: Role */}
             {step === 1 && (
               <motion.div
                 key="step1"
-                custom={direction}
-                variants={variants}
+                custom={dir}
+                variants={slide}
                 initial="enter"
                 animate="center"
                 exit="exit"
-                transition={{ duration: 0.3 }}
-                className="absolute inset-0 p-8 sm:p-12 flex flex-col"
+                transition={{ duration: 0.28, ease: "easeOut" }}
+                className="p-8 sm:p-10 flex flex-col"
               >
-                <h2 className="text-3xl font-serif font-bold mb-2">What best describes you?</h2>
-                <p className="text-muted-foreground mb-8">We'll tailor your dashboard experience based on your role.</p>
-                
-                <RadioGroup value={accountType} onValueChange={setAccountType} className="grid sm:grid-cols-2 gap-4 flex-1 content-start">
-                  {[
-                    { id: "agent", label: "Real Estate Agent", icon: Building2 },
-                    { id: "host", label: "Airbnb Host", icon: Home },
-                    { id: "developer", label: "Property Developer", icon: Briefcase },
-                    { id: "manager", label: "Property Manager", icon: Briefcase }
-                  ].map(role => (
-                    <Label 
-                      key={role.id} 
-                      className={`flex items-center gap-4 p-4 border rounded-xl cursor-pointer transition-colors ${accountType === role.id ? 'border-primary bg-primary/5' : 'border-border bg-background hover:bg-accent'}`}
-                    >
-                      <RadioGroupItem value={role.id} id={role.id} className="sr-only" />
-                      <div className={`p-2 rounded-lg ${accountType === role.id ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
-                        <role.icon className="w-5 h-5" />
-                      </div>
-                      <span className="font-medium">{role.label}</span>
-                    </Label>
-                  ))}
-                </RadioGroup>
+                <p className="text-xs font-mono text-muted-foreground uppercase tracking-widest mb-2">Step 1 of 2</p>
+                <h2 className="text-2xl font-display font-bold mb-1">What are you using TourVision for?</h2>
+                <p className="text-sm text-muted-foreground mb-7">We'll tailor your experience to your role.</p>
 
-                <div className="mt-8 flex justify-end">
-                  <Button onClick={nextStep} className="bg-primary text-primary-foreground font-bold px-8 h-12" disabled={!accountType}>
-                    Continue →
+                <div className="grid sm:grid-cols-2 gap-3 mb-8">
+                  {ROLES.map((role) => (
+                    <SelectCard key={role.id} item={role} selected={useCase === role.id} onSelect={setUseCase} />
+                  ))}
+                </div>
+
+                <div className="flex justify-between items-center mt-auto">
+                  <button onClick={skip} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                    Skip setup
+                  </button>
+                  <Button
+                    onClick={() => go(2)}
+                    disabled={!useCase}
+                    className="bg-primary text-primary-foreground font-bold px-8 h-11 disabled:opacity-40"
+                  >
+                    Continue <ArrowRight className="w-4 h-4 ml-1" />
                   </Button>
                 </div>
               </motion.div>
             )}
 
+            {/* Step 2: Referral */}
             {step === 2 && (
               <motion.div
                 key="step2"
-                custom={direction}
-                variants={variants}
+                custom={dir}
+                variants={slide}
                 initial="enter"
                 animate="center"
                 exit="exit"
-                transition={{ duration: 0.3 }}
-                className="absolute inset-0 p-8 sm:p-12 flex flex-col"
+                transition={{ duration: 0.28, ease: "easeOut" }}
+                className="p-8 sm:p-10 flex flex-col"
               >
-                <h2 className="text-3xl font-serif font-bold mb-2">Where are you based?</h2>
-                <p className="text-muted-foreground mb-8">Help us optimize your server region for the fastest processing.</p>
+                <p className="text-xs font-mono text-muted-foreground uppercase tracking-widest mb-2">Step 2 of 2</p>
+                <h2 className="text-2xl font-display font-bold mb-1">Where did you hear about us?</h2>
+                <p className="text-sm text-muted-foreground mb-7">This helps us understand where to improve.</p>
 
-                <div className="space-y-6 flex-1">
-                  <div className="space-y-2">
-                    <Label>Country / Region <span className="text-destructive">*</span></Label>
-                    <Select value={country} onValueChange={setCountry}>
-                      <SelectTrigger className="h-12 bg-background">
-                        <SelectValue placeholder="Select country" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="uae">United Arab Emirates</SelectItem>
-                        <SelectItem value="ksa">Saudi Arabia</SelectItem>
-                        <SelectItem value="lebanon">Lebanon</SelectItem>
-                        <SelectItem value="egypt">Egypt</SelectItem>
-                        <SelectItem value="qatar">Qatar</SelectItem>
-                        <SelectItem value="other">Other Region</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>WhatsApp Number <span className="text-muted-foreground font-normal">(Optional - for tour ready alerts)</span></Label>
-                    <Input 
-                      placeholder="+971 50 123 4567" 
-                      className="h-12 bg-background" 
-                      value={whatsapp}
-                      onChange={e => setWhatsapp(e.target.value)}
-                    />
-                  </div>
+                <div className="grid sm:grid-cols-2 gap-3 mb-8">
+                  {SOURCES.map((src) => (
+                    <SelectCard key={src.id} item={src} selected={referralSource === src.id} onSelect={setReferralSource} />
+                  ))}
                 </div>
 
-                <div className="mt-8 flex justify-end">
-                  <Button onClick={nextStep} className="bg-primary text-primary-foreground font-bold px-8 h-12" disabled={!country}>
-                    Continue →
-                  </Button>
-                </div>
-              </motion.div>
-            )}
-
-            {step === 3 && (
-              <motion.div
-                key="step3"
-                custom={direction}
-                variants={variants}
-                initial="enter"
-                animate="center"
-                exit="exit"
-                transition={{ duration: 0.3 }}
-                className="absolute inset-0 p-8 sm:p-12 flex flex-col items-center text-center justify-center"
-              >
-                <div className="w-16 h-16 bg-primary/10 text-primary rounded-full flex items-center justify-center mb-6">
-                  <MapPin className="w-8 h-8" />
-                </div>
-                <h2 className="text-3xl font-serif font-bold mb-2">You're all set.</h2>
-                <p className="text-muted-foreground mb-8">Let's make your first 3D tour. Paste any listing URL below.</p>
-
-                <div className="w-full max-w-md relative flex items-center mb-8">
-                  <Link2 className="absolute left-4 text-muted-foreground w-5 h-5" />
-                  <Input 
-                    placeholder="https://zillow.com/homedetails/..." 
-                    className="h-14 pl-12 pr-4 bg-background text-lg"
-                    value={url}
-                    onChange={e => setUrl(e.target.value)}
-                  />
-                </div>
-
-                <div className="flex flex-col items-center gap-4 w-full">
-                  <Button 
-                    onClick={finish} 
-                    className="w-full max-w-md bg-primary text-primary-foreground hover:bg-primary/90 glow-primary font-bold h-14 text-lg"
-                    disabled={completeMutation.isPending}
+                <div className="flex justify-between items-center mt-auto">
+                  <button onClick={() => go(1)} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                    ← Back
+                  </button>
+                  <Button
+                    onClick={finish}
+                    disabled={!referralSource || saving}
+                    className="bg-primary text-primary-foreground font-bold px-8 h-11 disabled:opacity-40"
                   >
-                    {completeMutation.isPending ? "Setting up..." : "Generate My First Tour →"}
-                  </Button>
-                  <Button variant="ghost" onClick={finish} className="text-muted-foreground hover:text-foreground">
-                    Skip for now
+                    {saving ? "Saving…" : "Finish Setup →"}
                   </Button>
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
         </div>
+
+        <p className="text-center text-xs text-muted-foreground mt-4">
+          Takes 20 seconds · You can change this later in settings
+        </p>
       </div>
     </div>
   );

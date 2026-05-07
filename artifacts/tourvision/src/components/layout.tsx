@@ -54,11 +54,13 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               </div>
               <div className="p-4 border-b border-border flex items-center gap-3">
                 <Avatar className="h-10 w-10 border border-border">
-                  <AvatarFallback className="bg-muted text-foreground">AS</AvatarFallback>
+                  <AvatarFallback className="bg-muted text-foreground">
+                    {user?.firstName?.[0]?.toUpperCase() ?? user?.email?.[0]?.toUpperCase() ?? "U"}
+                  </AvatarFallback>
                 </Avatar>
                 <div className="flex flex-col">
-                  <span className="text-sm font-bold">{user?.name}</span>
-                  <span className="text-xs text-muted-foreground uppercase">{user?.subscriptionTier}</span>
+                  <span className="text-sm font-bold">{user?.firstName ?? user?.email ?? "User"}</span>
+                  <span className="text-xs text-muted-foreground uppercase">Free Plan</span>
                 </div>
               </div>
               <div className="flex-1 overflow-auto"><NavItems /></div>
@@ -79,11 +81,13 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         </div>
         <div className="p-4 border-b border-border flex items-center gap-3">
           <Avatar className="h-10 w-10 border border-border">
-            <AvatarFallback className="bg-muted text-foreground">AS</AvatarFallback>
+            <AvatarFallback className="bg-muted text-foreground">
+              {user?.firstName?.[0]?.toUpperCase() ?? user?.email?.[0]?.toUpperCase() ?? "U"}
+            </AvatarFallback>
           </Avatar>
           <div className="flex flex-col">
-            <span className="text-sm font-bold">{user?.name}</span>
-            <span className="text-xs text-primary uppercase font-mono">{user?.subscriptionTier} PLAN</span>
+            <span className="text-sm font-bold">{user?.firstName ?? user?.email ?? "User"}</span>
+            <span className="text-xs text-primary uppercase font-mono">Free Plan</span>
           </div>
         </div>
         <div className="flex-1 py-4 overflow-y-auto">

@@ -73,10 +73,34 @@ export const GetUserLimitsResponse = zod.object({
 });
 
 /**
+ * @summary Check if the current user has completed onboarding
+ */
+export const GetOnboardingStatusResponse = zod.object({
+  completed: zod.boolean(),
+});
+
+/**
  * @summary Complete user onboarding
  */
 export const CompleteOnboardingBody = zod.object({
-  accountType: zod.enum(["agent", "host", "developer", "manager", "other"]),
+  useCase: zod.enum([
+    "real_estate_agent",
+    "airbnb_host",
+    "architect_designer",
+    "developer",
+    "other",
+  ]),
+  referralSource: zod.enum([
+    "reddit",
+    "tiktok",
+    "youtube",
+    "google",
+    "friend",
+    "other",
+  ]),
+  accountType: zod
+    .enum(["agent", "host", "developer", "manager", "other"])
+    .optional(),
   country: zod.string().optional(),
   whatsappNumber: zod.string().optional(),
 });

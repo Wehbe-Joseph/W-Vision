@@ -115,6 +115,33 @@ export interface UpdateUserProfileBody {
   whatsappNumber?: string;
 }
 
+export interface OnboardingStatus {
+  completed: boolean;
+}
+
+export type OnboardingBodyUseCase =
+  (typeof OnboardingBodyUseCase)[keyof typeof OnboardingBodyUseCase];
+
+export const OnboardingBodyUseCase = {
+  real_estate_agent: "real_estate_agent",
+  airbnb_host: "airbnb_host",
+  architect_designer: "architect_designer",
+  developer: "developer",
+  other: "other",
+} as const;
+
+export type OnboardingBodyReferralSource =
+  (typeof OnboardingBodyReferralSource)[keyof typeof OnboardingBodyReferralSource];
+
+export const OnboardingBodyReferralSource = {
+  reddit: "reddit",
+  tiktok: "tiktok",
+  youtube: "youtube",
+  google: "google",
+  friend: "friend",
+  other: "other",
+} as const;
+
 export type OnboardingBodyAccountType =
   (typeof OnboardingBodyAccountType)[keyof typeof OnboardingBodyAccountType];
 
@@ -127,7 +154,9 @@ export const OnboardingBodyAccountType = {
 } as const;
 
 export interface OnboardingBody {
-  accountType: OnboardingBodyAccountType;
+  useCase: OnboardingBodyUseCase;
+  referralSource: OnboardingBodyReferralSource;
+  accountType?: OnboardingBodyAccountType;
   country?: string;
   whatsappNumber?: string;
 }

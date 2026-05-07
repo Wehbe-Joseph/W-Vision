@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { profilesTable } from "@workspace/db";
+import { profilesTable, onboardingAnswersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import {
   UpdateUserProfileBody,
@@ -121,24 +121,63 @@ router.get("/user/limits", async (req, res) => {
   }
 });
 
+router.get("/user/onboarding-status", async (req, res) => {
+  try {
+    if (!req.isAuthenticated()) {
+      return res.json({ completed: false });
+    }
+    const answer = await db.query.onboardingAnswersTable.findFirst({
+      where: eq(onboardingAnswersTable.userId, req.user.id),
+    });
+    return res.json({ completed: !!answer });
+  } catch (err) {
+    req.log.error(err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 router.post("/user/onboarding", async (req, res) => {
   try {
-    const userId = req.headers["x-user-id"] as string;
-    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
 
-    const parsed = CompleteOnboardingBody.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: "Invalid input" });
+    const { useCase, referralSource } = req.body as {
+      useCase?: string;
+      referralSource?: string;
+    };
 
-    await db
-      .update(profilesTable)
-      .set({
-        accountType: parsed.data.accountType,
-        country: parsed.data.country ?? undefined,
-        whatsappNumber: parsed.data.whatsappNumber ?? undefined,
-        onboardingCompleted: true,
-        updatedAt: new Date(),
-      })
-      .where(eq(profilesTable.id, userId));
+    if (!useCase || !referralSource) {
+      return res.status(400).json({ error: "useCase and referralSource are required" });
+    }
+
+    // Upsert onboarding answers linked to the real auth user
+    const existing = await db.query.onboardingAnswersTable.findFirst({
+      where: eq(onboardingAnswersTable.userId, req.user.id),
+    });
+
+    if (existing) {
+      await db
+        .update(onboardingAnswersTable)
+        .set({ useCase, referralSource })
+        .where(eq(onboardingAnswersTable.userId, req.user.id));
+    } else {
+      await db.insert(onboardingAnswersTable).values({
+        userId: req.user.id,
+        useCase,
+        referralSource,
+      });
+    }
+
+    // Also mark the profile as onboarding-completed if profile exists
+    try {
+      await db
+        .update(profilesTable)
+        .set({ onboardingCompleted: true, updatedAt: new Date() })
+        .where(eq(profilesTable.id, req.user.id));
+    } catch {
+      // Profile may not exist yet — that's fine
+    }
 
     return res.json({ success: true, message: "Onboarding completed" });
   } catch (err) {

@@ -5,3 +5,4 @@ export * from "./tour_views";
 export * from "./buyer_leads";
 export * from "./angle_flags";
 export * from "./auth";
+export * from "./onboarding_answers";

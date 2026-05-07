@@ -1,454 +1,417 @@
 import { Link, useLocation } from "wouter";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence, type Variants } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { SiZillow, SiAirbnb } from "react-icons/si";
-import { CheckCircle2, ArrowRight, Cuboid, Link as LinkIcon, ShieldCheck, Share2, BarChart3, Building2, Eye, Users, Clock, TrendingUp, Copy, CheckCheck } from "lucide-react";
-import { useState } from "react";
+import {
+  CheckCircle2, ArrowRight, Link as LinkIcon, Upload, X, ImagePlus,
+  Sparkles, ChevronRight, BarChart3, Share2, ShieldCheck
+} from "lucide-react";
+import { useState, useRef, useCallback, useEffect } from "react";
+import { useAuth } from "@/hooks/use-auth";
+import {
+  savePendingTour, filesToPendingPhotos, PendingPhoto
+} from "@/hooks/use-pending-tour";
 
-const fadeUp = {
-  hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.4 } }
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+const fadeUp: Variants = {
+  hidden: { opacity: 0, y: 24 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.45, ease: [0.25, 0.46, 0.45, 0.94] } },
 };
-
-const staggerContainer = {
+const stagger: Variants = {
   hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { staggerChildren: 0.1 } }
+  visible: { opacity: 1, transition: { staggerChildren: 0.08 } },
 };
-
-function FeatureCard({ label, title, desc, children }: { label: string; title: string; desc: string; children: React.ReactNode }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 32 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-80px" }}
-      transition={{ duration: 0.5, ease: "easeOut" }}
-      className="bg-card border border-border rounded-2xl overflow-hidden"
-    >
-      <div className="p-8 pb-4">
-        <p className="text-xs font-mono text-muted-foreground uppercase tracking-widest mb-4">{label}</p>
-        <h3 className="text-2xl font-serif font-bold mb-3 leading-tight">{title}</h3>
-        <p className="text-muted-foreground text-sm leading-relaxed mb-6">{desc}</p>
-        <Link href="/signup" className="inline-flex items-center gap-1 text-sm font-bold hover:gap-2 transition-all">
-          Try Now <ArrowRight className="w-4 h-4" />
-        </Link>
-      </div>
-      <div className="mx-6 mb-6 bg-background border border-border rounded-xl overflow-hidden">
-        {children}
-      </div>
-    </motion.div>
-  );
-}
 
 export default function Landing() {
-  const [url, setUrl] = useState("");
+  const { isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (url.trim()) {
-      setLocation(`/signup?url=${encodeURIComponent(url.trim())}`);
+  const [url, setUrl] = useState("");
+  const [photos, setPhotos] = useState<PendingPhoto[]>([]);
+  const [dragging, setDragging] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const addFiles = useCallback(async (files: FileList | null) => {
+    if (!files) return;
+    const arr = Array.from(files).filter((f) => f.type.startsWith("image/"));
+    if (!arr.length) return;
+    const converted = await filesToPendingPhotos(arr);
+    setPhotos((prev) => {
+      const existing = new Set(prev.map((p) => p.name));
+      const fresh = converted.filter((c) => !existing.has(c.name));
+      return [...prev, ...fresh].slice(0, 20);
+    });
+  }, []);
+
+  const onDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setDragging(false);
+      addFiles(e.dataTransfer.files);
+    },
+    [addFiles],
+  );
+
+  const removePhoto = (name: string) =>
+    setPhotos((prev) => prev.filter((p) => p.name !== name));
+
+  const handleCreate = async () => {
+    if (!url.trim() && !photos.length) return;
+    setSubmitting(true);
+
+    const pending = { url: url.trim() || undefined, photos: photos.length ? photos : undefined };
+    savePendingTour(pending);
+
+    if (isAuthenticated) {
+      setLocation("/dashboard/new-tour");
     } else {
-      setLocation("/signup");
+      window.location.href = `${BASE}/api/login?returnTo=${encodeURIComponent(BASE + "/dashboard")}`;
     }
   };
 
+  const urlPasted = url.trim().length > 0;
+  const hasPhotos = photos.length > 0;
+  const canSubmit = urlPasted || hasPhotos;
+
   return (
-    <div className="min-h-screen bg-background text-foreground font-sans selection:bg-primary/30">
+    <div className="min-h-screen bg-background text-foreground font-sans">
+      {/* Grid bg */}
       <div className="fixed inset-0 pointer-events-none z-0">
         <div className="absolute inset-0 bg-[linear-gradient(rgba(26,23,20,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(26,23,20,0.04)_1px,transparent_1px)] bg-[size:50px_50px] [mask-image:radial-gradient(ellipse_60%_60%_at_50%_0%,#000_60%,transparent_100%)]" />
       </div>
-      {/* Navbar */}
+
+      {/* Nav */}
       <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-background/80 backdrop-blur-xl">
         <div className="container mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-primary animate-pulse" />
-            <span className="font-serif font-bold text-xl tracking-tight">W Vision</span>
+            <span className="font-display font-bold text-xl tracking-tight">TOURVISION</span>
           </div>
           <div className="hidden md:flex items-center gap-8 text-sm font-medium text-muted-foreground">
-            <a href="#how-it-works" className="hover:text-primary transition-colors">How it Works</a>
-            <a href="#pricing" className="hover:text-primary transition-colors">Pricing</a>
+            <a href="#how-it-works" className="hover:text-foreground transition-colors">How it Works</a>
+            <a href="#pricing" className="hover:text-foreground transition-colors">Pricing</a>
           </div>
-          <div className="flex items-center gap-4">
-            <Link href="/login">
-              <Button variant="outline" className="border-primary text-primary hover:bg-primary/10">Sign In</Button>
-            </Link>
-            <Link href="/signup">
-              <Button className="bg-primary text-primary-foreground hover:bg-primary/90 glow-primary font-bold">Start Free</Button>
-            </Link>
+          <div className="flex items-center gap-3">
+            {isAuthenticated ? (
+              <Link href="/dashboard">
+                <Button className="bg-primary text-primary-foreground font-bold">Dashboard</Button>
+              </Link>
+            ) : (
+              <>
+                <Link href="/login">
+                  <Button variant="outline" className="border-border hover:bg-accent">Sign In</Button>
+                </Link>
+                <Link href="/login">
+                  <Button className="bg-primary text-primary-foreground font-bold">Start Free</Button>
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </nav>
-      <main className="relative z-10 pt-32 pb-20 overflow-hidden">
+
+      <main className="relative z-10 pt-28 pb-24">
         {/* Hero */}
-        <section className="container mx-auto px-6 text-center max-w-5xl">
-          <motion.div initial="hidden" animate="visible" variants={staggerContainer} className="flex flex-col items-center">
-            <motion.div variants={fadeUp} className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-primary/30 bg-primary/5 text-primary text-sm mb-8 font-mono">
-              ✦ Built on next-generation 3D world generation
+        <section className="container mx-auto px-6 max-w-5xl text-center">
+          <motion.div initial="hidden" animate="visible" variants={stagger} className="flex flex-col items-center">
+            <motion.div variants={fadeUp} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/30 bg-primary/5 text-primary text-xs mb-8 font-mono tracking-widest">
+              ✦ NEXT-GENERATION 3D WORLD GENERATION
             </motion.div>
-            <motion.h1 variants={fadeUp} className="text-5xl md:text-7xl font-serif font-extrabold tracking-tighter leading-[1.1] mb-6">
-              Any Listing. Any Photos.<br />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary-foreground">Instant 3D Walkthrough.</span>
+
+            <motion.h1 variants={fadeUp} className="text-5xl md:text-7xl font-display font-bold tracking-tight leading-[1.05] mb-6">
+              ANY LISTING.<br />
+              <span className="text-transparent bg-clip-text bg-gradient-to-br from-foreground to-foreground/40">
+                INSTANT 3D TOUR.
+              </span>
             </motion.h1>
-            <motion.p variants={fadeUp} className="text-xl text-muted-foreground mb-10 max-w-2xl">
-              Paste a URL. Our AI extracts the photos, builds a photorealistic 3D world, and gives you a shareable tour link in minutes.
+
+            <motion.p variants={fadeUp} className="text-lg text-muted-foreground mb-12 max-w-xl leading-relaxed">
+              Paste a listing URL, upload extra photos, or both — our AI builds a photorealistic walkthrough and gives you a shareable link in minutes.
             </motion.p>
-            <motion.div variants={fadeUp} className="w-full max-w-xl mb-12">
-              <form onSubmit={handleSubmit} className="flex items-center gap-0 bg-background border border-border rounded-xl shadow-md overflow-hidden focus-within:ring-2 focus-within:ring-primary/30 transition-all">
-                <Input
-                  type="url"
-                  value={url}
-                  onChange={e => setUrl(e.target.value)}
-                  placeholder="https://www.zillow.com/homedetails/..."
-                  className="flex-1 h-14 px-5 border-0 shadow-none focus-visible:ring-0 bg-transparent text-base placeholder:text-muted-foreground/60 font-mono text-sm"
-                />
-                <button
-                  type="submit"
-                  className="h-10 w-10 mr-2 rounded-lg bg-primary text-primary-foreground flex items-center justify-center shrink-0 hover:bg-primary/85 transition-colors"
-                  aria-label="Generate tour"
-                >
-                  <ArrowRight className="w-5 h-5" />
-                </button>
-              </form>
-              <p className="text-xs text-muted-foreground mt-3 text-center font-mono">Paste any Zillow, Airbnb, Bayut, Booking or Property Finder link</p>
-            </motion.div>
-            <motion.div variants={fadeUp} className="flex flex-wrap justify-center gap-8 text-sm text-muted-foreground font-medium">
-              <div className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-primary" /> No credit card required</div>
-              <div className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-primary" /> First tour completely free</div>
-              <div className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-primary" /> Ready in under 30 minutes</div>
-            </motion.div>
-          </motion.div>
 
-          <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6, duration: 0.8 }} className="mt-20 relative">
-            <div className="absolute -inset-10 bg-foreground/5 blur-[80px] rounded-full z-0" />
-            <div className="relative z-10 rounded-xl border border-border bg-card shadow-2xl overflow-hidden aspect-[16/9] flex items-center justify-center">
-              <span className="text-muted-foreground font-mono uppercase tracking-widest text-sm">Dashboard Preview</span>
-            </div>
-            
-            {/* Floating Stats */}
-            <motion.div animate={{ y: [-10, 10, -10] }} transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }} className="absolute -left-10 top-20 bg-card border border-border p-4 rounded-xl shadow-xl flex flex-col gap-1 hidden md:flex">
-              <span className="text-3xl font-bold text-primary font-serif">2,847</span>
-              <span className="text-xs text-muted-foreground uppercase tracking-wider">Tours Generated</span>
-            </motion.div>
-            <motion.div animate={{ y: [10, -10, 10] }} transition={{ repeat: Infinity, duration: 5, ease: "easeInOut" }} className="absolute -right-10 bottom-20 bg-card border border-border p-4 rounded-xl shadow-xl flex flex-col gap-1 hidden md:flex">
-              <span className="text-3xl font-bold text-primary font-serif">28 min</span>
-              <span className="text-xs text-muted-foreground uppercase tracking-wider">Avg Processing</span>
-            </motion.div>
-          </motion.div>
-        </section>
-
-        {/* ── Sticky Feature Showcase ── */}
-        <section className="mt-32 container mx-auto px-6">
-          <div className="flex gap-12 xl:gap-20 items-start">
-
-            {/* LEFT — sticky panel */}
-            <div className="hidden lg:flex flex-col sticky top-24 self-start w-[340px] xl:w-[380px] shrink-0">
-              <h2 className="text-4xl xl:text-5xl font-serif font-bold leading-[1.1] mb-5">
-                Virtual tours.<br />Built in minutes.
-              </h2>
-              <p className="text-muted-foreground text-base mb-8 leading-relaxed">
-                From listing URL to navigable 3D walkthrough — TourVision handles the entire workflow.
-              </p>
-              <Link href="/signup">
-                <Button className="w-fit bg-primary text-primary-foreground font-bold px-6 h-11 mb-10">
-                  Start Free →
-                </Button>
-              </Link>
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { icon: LinkIcon,    label: "Paste URL"     },
-                  { icon: Cuboid,      label: "3D Generation" },
-                  { icon: Share2,      label: "Share Link"    },
-                  { icon: BarChart3,   label: "Analytics"     },
-                  { icon: ShieldCheck, label: "AI Confidence" },
-                  { icon: Building2,   label: "Agency Brand"  },
-                ].map(({ icon: Icon, label }) => (
-                  <div key={label} className="flex flex-col items-center gap-2 bg-card border border-border rounded-xl p-4 text-center">
-                    <Icon className="w-5 h-5 text-muted-foreground" />
-                    <span className="text-xs text-muted-foreground font-mono">{label}</span>
+            {/* Creation box */}
+            <motion.div variants={fadeUp} className="w-full max-w-3xl">
+              <div className="bg-card border border-border rounded-2xl shadow-xl overflow-hidden">
+                <div className="grid md:grid-cols-[1fr_auto_1fr]">
+                  {/* Option A — URL */}
+                  <div className="p-6 flex flex-col gap-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center">A</div>
+                      <span className="text-sm font-medium">Paste a listing URL</span>
+                    </div>
+                    <div className="flex items-center gap-2 px-3 h-12 bg-background border border-border rounded-xl focus-within:ring-2 focus-within:ring-primary/30 transition-all">
+                      <LinkIcon className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <input
+                        type="url"
+                        placeholder="https://zillow.com/homedetails/..."
+                        className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                        value={url}
+                        onChange={(e) => setUrl(e.target.value)}
+                      />
+                      {url && (
+                        <button onClick={() => setUrl("")} className="text-muted-foreground hover:text-foreground">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <SiZillow className="w-4 h-4" />
+                      <SiAirbnb className="w-4 h-4" />
+                      <span>Zillow, Airbnb, Bayut, Property Finder…</span>
+                    </div>
                   </div>
-                ))}
-              </div>
-            </div>
 
-            {/* RIGHT — scrolling feature cards */}
-            <div className="flex-1 flex flex-col gap-6 pb-12">
+                  {/* Divider */}
+                  <div className="hidden md:flex flex-col items-center justify-center px-2 gap-2 py-6">
+                    <div className="w-px flex-1 bg-border" />
+                    <span className="text-xs font-mono text-muted-foreground bg-card px-1">OR</span>
+                    <div className="w-px flex-1 bg-border" />
+                  </div>
+                  <div className="md:hidden h-px bg-border mx-6" />
 
-              {/* Card 1 — Paste Any Link */}
-              <FeatureCard label="PASTE ANY LINK" title="Any listing. Instantly extracted." desc="Drop a URL from Zillow, Airbnb, Bayut, or Property Finder. Our engine extracts every photo automatically — no uploads, no manual work.">
-                <div className="p-6 flex flex-col gap-4">
-                  <div className="flex items-center gap-3 bg-background border border-border rounded-lg px-4 h-11 shadow-sm">
-                    <LinkIcon className="w-4 h-4 text-muted-foreground shrink-0" />
-                    <span className="text-sm font-mono text-muted-foreground truncate">https://bayut.com/property/villa-palm-jumeirah-7482...</span>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {["Zillow", "Airbnb", "Bayut", "PropertyFinder", "Booking.com", "Rightmove"].map(p => (
-                      <span key={p} className="text-xs font-mono bg-muted border border-border px-3 py-1 rounded-full text-muted-foreground">{p}</span>
-                    ))}
-                  </div>
-                  <div className="mt-2 space-y-2">
-                    {["Extracting photos", "Detecting rooms", "Mapping geometry"].map((step, i) => (
-                      <div key={step} className="flex items-center gap-3">
-                        <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${i < 2 ? "bg-primary" : "bg-muted border border-border"}`}>
-                          {i < 2 && <CheckCheck className="w-2.5 h-2.5 text-primary-foreground" />}
+                  {/* Option B — Photos */}
+                  <div className="p-6 flex flex-col gap-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center">B</div>
+                      <span className="text-sm font-medium">Upload photos</span>
+                    </div>
+                    <div
+                      className={`relative flex-1 min-h-[80px] border-2 border-dashed rounded-xl flex items-center justify-center cursor-pointer transition-all ${dragging ? "border-primary bg-primary/5 scale-[0.99]" : "border-border hover:border-primary/50 hover:bg-accent/30"}`}
+                      onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+                      onDragLeave={() => setDragging(false)}
+                      onDrop={onDrop}
+                      onClick={() => fileRef.current?.click()}
+                    >
+                      <div className="flex flex-col items-center gap-1.5 py-4 text-center">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${hasPhotos ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                          {hasPhotos ? <CheckCircle2 className="w-5 h-5" /> : <ImagePlus className="w-5 h-5" />}
                         </div>
-                        <div className="flex-1 bg-muted rounded-full h-1.5 overflow-hidden">
-                          <div className="bg-primary h-full rounded-full transition-all" style={{ width: i === 0 ? "100%" : i === 1 ? "100%" : "40%" }} />
-                        </div>
-                        <span className="text-xs font-mono text-muted-foreground w-24 shrink-0">{step}</span>
+                        <p className="text-sm font-medium">
+                          {hasPhotos ? `${photos.length} photo${photos.length > 1 ? "s" : ""} added` : "Drag & drop or click"}
+                        </p>
+                        <p className="text-xs text-muted-foreground">JPG, PNG, WEBP — up to 20 photos</p>
                       </div>
-                    ))}
+                      <input
+                        ref={fileRef}
+                        type="file"
+                        multiple
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => addFiles(e.target.files)}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">Adding photos improves 3D quality significantly</p>
                   </div>
                 </div>
-              </FeatureCard>
 
-              {/* Card 2 — 3D Generation */}
-              <FeatureCard label="3D GENERATION" title="Photorealistic rooms. Ready in minutes." desc="Our spatial AI engine builds navigable 3D geometry from your listing photos. Every room, every angle — without a camera crew.">
-                <div className="p-4 grid grid-cols-2 gap-3">
-                  {[
-                    { room: "Living Room",   conf: 97, color: "bg-emerald-100 border-emerald-200" },
-                    { room: "Master Bedroom",conf: 91, color: "bg-amber-100 border-amber-200"   },
-                    { room: "Kitchen",       conf: 88, color: "bg-sky-100 border-sky-200"        },
-                    { room: "Bathroom",      conf: 84, color: "bg-rose-100 border-rose-200"      },
-                  ].map(({ room, conf, color }) => (
-                    <div key={room} className={`border rounded-lg p-3 flex flex-col gap-2 ${color}`}>
-                      <div className="h-20 bg-white/60 rounded-md flex items-center justify-center">
-                        <Cuboid className="w-8 h-8 text-foreground/30" />
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium truncate">{room}</span>
-                        <span className="text-xs font-mono font-bold shrink-0">{conf}%</span>
-                      </div>
-                      <div className="bg-white/50 rounded-full h-1 overflow-hidden">
-                        <div className="bg-foreground/40 h-full rounded-full" style={{ width: `${conf}%` }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </FeatureCard>
-
-              {/* Card 3 — Share a Tour */}
-              <FeatureCard label="SHARE A TOUR" title="One link. Every buyer." desc="Get a shareable URL the moment your tour is ready. Embed it in emails, WhatsApp, or your listing page — buyers explore with no app required.">
-                <div className="p-6 flex flex-col gap-4">
-                  <div className="bg-background border border-border rounded-xl p-4 shadow-sm flex flex-col gap-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">Share Tour Link</span>
-                      <span className="text-xs font-mono text-emerald-600 font-bold">● Live</span>
-                    </div>
-                    <div className="flex items-center gap-2 bg-muted rounded-lg px-3 h-9">
-                      <span className="flex-1 text-xs font-mono text-muted-foreground truncate">tourvision.app/tour/palm-jumeirah-villa</span>
-                      <Copy className="w-3.5 h-3.5 text-muted-foreground shrink-0 cursor-pointer" />
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 pt-1">
-                      {[
-                        { label: "Views",   val: "248" },
-                        { label: "Leads",   val: "12"  },
-                        { label: "Avg Time",val: "4:32" },
-                      ].map(({ label, val }) => (
-                        <div key={label} className="bg-muted rounded-lg p-2 text-center">
-                          <div className="text-lg font-bold font-serif">{val}</div>
-                          <div className="text-[10px] font-mono text-muted-foreground">{label}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <div className="flex-1 bg-card border border-border rounded-lg p-3 text-center text-xs font-mono text-muted-foreground">WhatsApp</div>
-                    <div className="flex-1 bg-card border border-border rounded-lg p-3 text-center text-xs font-mono text-muted-foreground">Email</div>
-                    <div className="flex-1 bg-card border border-border rounded-lg p-3 text-center text-xs font-mono text-muted-foreground">Embed</div>
-                  </div>
-                </div>
-              </FeatureCard>
-
-              {/* Card 4 — Buyer Analytics */}
-              <FeatureCard label="BUYER ANALYTICS" title="Know exactly who's looking." desc="See which rooms buyers linger in, how long they explore, and when they drop off. Real data to qualify leads before the first call.">
-                <div className="p-6 flex flex-col gap-4">
-                  <div className="grid grid-cols-2 gap-3">
-                    {[
-                      { icon: Eye,        label: "Total Views",   val: "1,284", trend: "+18%"  },
-                      { icon: Clock,      label: "Avg Time",      val: "5:14",  trend: "+42s"  },
-                      { icon: Users,      label: "Leads",         val: "73",    trend: "+9"    },
-                      { icon: TrendingUp, label: "Conversion",    val: "5.7%",  trend: "+1.2%" },
-                    ].map(({ icon: Icon, label, val, trend }) => (
-                      <div key={label} className="bg-muted border border-border rounded-xl p-4 flex flex-col gap-2">
-                        <div className="flex items-center justify-between">
-                          <Icon className="w-4 h-4 text-muted-foreground" />
-                          <span className="text-[10px] font-mono text-emerald-600 font-bold">{trend}</span>
-                        </div>
-                        <div className="text-2xl font-bold font-serif">{val}</div>
-                        <div className="text-xs font-mono text-muted-foreground">{label}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="bg-muted border border-border rounded-xl p-4">
-                    <div className="text-xs font-mono text-muted-foreground mb-3 uppercase tracking-wider">Most Viewed Rooms</div>
-                    <div className="flex flex-col gap-2">
-                      {[
-                        { room: "Living Room",    pct: 88 },
-                        { room: "Master Bedroom", pct: 71 },
-                        { room: "Kitchen",        pct: 54 },
-                      ].map(({ room, pct }) => (
-                        <div key={room} className="flex items-center gap-3">
-                          <span className="text-xs font-mono text-foreground w-32 shrink-0">{room}</span>
-                          <div className="flex-1 bg-background rounded-full h-1.5 overflow-hidden">
-                            <div className="bg-primary h-full rounded-full" style={{ width: `${pct}%` }} />
+                {/* Photo thumbnails */}
+                <AnimatePresence>
+                  {hasPhotos && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.25 }}
+                      className="border-t border-border overflow-hidden"
+                    >
+                      <div className="p-4 flex gap-2 flex-wrap">
+                        {photos.map((photo) => (
+                          <div key={photo.name} className="relative group w-16 h-16 rounded-lg overflow-hidden border border-border shrink-0">
+                            <img src={photo.dataUrl} alt={photo.name} className="w-full h-full object-cover" />
+                            <button
+                              onClick={() => removePhoto(photo.name)}
+                              className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                            >
+                              <X className="w-4 h-4 text-white" />
+                            </button>
                           </div>
-                          <span className="text-xs font-mono text-muted-foreground w-8 text-right">{pct}%</span>
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                        <button
+                          onClick={() => fileRef.current?.click()}
+                          className="w-16 h-16 rounded-lg border-2 border-dashed border-border hover:border-primary/50 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors"
+                        >
+                          <Upload className="w-5 h-5" />
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Smart suggestion: URL only, no photos */}
+                <AnimatePresence>
+                  {urlPasted && !hasPhotos && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.25 }}
+                      className="border-t border-border overflow-hidden"
+                    >
+                      <div
+                        className="p-3 bg-primary/5 flex items-center gap-3 cursor-pointer hover:bg-primary/10 transition-colors"
+                        onClick={() => fileRef.current?.click()}
+                      >
+                        <Sparkles className="w-4 h-4 text-primary shrink-0" />
+                        <p className="text-sm text-primary font-medium flex-1">
+                          Want a better 3D tour? Add extra photos to improve tour quality.
+                        </p>
+                        <ChevronRight className="w-4 h-4 text-primary shrink-0" />
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Submit */}
+                <div className="p-5 border-t border-border bg-background/50">
+                  <Button
+                    onClick={handleCreate}
+                    disabled={!canSubmit || submitting}
+                    className="w-full h-12 bg-primary text-primary-foreground text-base font-bold hover:bg-primary/90 transition-all disabled:opacity-40"
+                  >
+                    {submitting ? "Redirecting…" : "Create 3D Tour →"}
+                  </Button>
+                  {!canSubmit && (
+                    <p className="text-center text-xs text-muted-foreground mt-2">
+                      Paste a URL or upload photos to get started
+                    </p>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Trust badges */}
+            <motion.div variants={fadeUp} className="flex items-center gap-6 mt-8 text-xs text-muted-foreground flex-wrap justify-center">
+              <div className="flex items-center gap-1.5"><ShieldCheck className="w-3.5 h-3.5" /> No credit card required</div>
+              <div className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5" /> Free tour included</div>
+              <div className="flex items-center gap-1.5"><Share2 className="w-3.5 h-3.5" /> Instant shareable link</div>
+            </motion.div>
+          </motion.div>
+        </section>
+
+        {/* How it works */}
+        <section id="how-it-works" className="container mx-auto px-6 max-w-5xl mt-28">
+          <motion.div
+            initial={{ opacity: 0, y: 32 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
+            className="text-center mb-16"
+          >
+            <p className="text-xs font-mono text-muted-foreground uppercase tracking-widest mb-3">Process</p>
+            <h2 className="text-4xl font-display font-bold">HOW IT WORKS</h2>
+          </motion.div>
+
+          <div className="grid md:grid-cols-3 gap-6">
+            {[
+              {
+                num: "01", icon: LinkIcon, title: "Paste or Upload",
+                desc: "Drop any listing URL or upload your own property photos — or both for the best results."
+              },
+              {
+                num: "02", icon: Sparkles, title: "AI Processes",
+                desc: "Our spatial AI engine extracts room geometry, classifies surfaces, and builds a full 3D world mesh."
+              },
+              {
+                num: "03", icon: Share2, title: "Share Instantly",
+                desc: "Get a branded, shareable tour link ready in minutes. Embed on your site or send to buyers."
+              },
+            ].map(({ num, icon: Icon, title, desc }) => (
+              <motion.div
+                key={num}
+                initial={{ opacity: 0, y: 24 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-80px" }}
+                transition={{ duration: 0.4 }}
+                className="bg-card border border-border rounded-2xl p-8"
+              >
+                <div className="flex items-center gap-3 mb-5">
+                  <span className="text-4xl font-display font-bold text-primary/20">{num}</span>
+                  <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
+                    <Icon className="w-5 h-5 text-primary" />
                   </div>
                 </div>
-              </FeatureCard>
-
-            </div>
-          </div>
-        </section>
-
-        {/* Logo bar */}
-        <section className="border-y border-border bg-card/50 py-8 mt-24 overflow-hidden flex flex-col items-center">
-          <p className="text-sm text-muted-foreground font-mono uppercase tracking-widest mb-6">Trusted by elite agents</p>
-          <div className="flex gap-16 items-center text-muted opacity-50 px-6">
-            <div className="flex items-center gap-2 text-2xl font-bold font-serif text-[#757575]"><SiZillow /> Zillow</div>
-            <div className="flex items-center gap-2 text-2xl font-bold font-serif text-[#757575]"><SiAirbnb /> Airbnb</div>
-            <div className="text-2xl font-bold font-serif tracking-tight text-[#757575]">Bayut</div>
-            <div className="text-2xl font-bold font-serif tracking-tight text-[#757575]">PropertyFinder</div>
-            <div className="text-2xl font-bold font-serif tracking-tight text-[#757575]">Booking.com</div>
-          </div>
-        </section>
-
-        {/* How it Works */}
-        <section id="how-it-works" className="container mx-auto px-6 py-24">
-          <h2 className="text-4xl font-serif font-bold text-center mb-16">Three steps to a <span className="text-primary">virtual world.</span></h2>
-          <div className="grid md:grid-cols-3 gap-8 mb-12">
-            {[
-              { step: "01", title: "Paste URL", desc: "Drop any Zillow, Airbnb, or Property Finder link.", icon: LinkIcon },
-              { step: "02", title: "AI Builds 3D", desc: "Our spatial AI engine extracts photos and builds the geometry.", icon: Cuboid },
-              { step: "03", title: "Share One Link", desc: "Get an instant, navigable embed for buyers.", icon: ArrowRight }
-            ].map((s, i) => (
-              <div key={i} className="bg-card border border-border p-8 rounded-xl flex flex-col items-center text-center relative group hover:border-primary/50 transition-colors">
-                <div className="w-16 h-16 rounded-full bg-background border border-border flex items-center justify-center mb-6 group-hover:bg-primary/10 transition-colors">
-                  <s.icon className="w-8 h-8 text-primary" />
-                </div>
-                <div className="font-mono text-primary text-sm mb-2">{s.step}</div>
-                <h3 className="text-xl font-bold mb-3">{s.title}</h3>
-                <p className="text-muted-foreground">{s.desc}</p>
-              </div>
+                <h3 className="text-xl font-display font-bold mb-2">{title}</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">{desc}</p>
+              </motion.div>
             ))}
           </div>
-          <div className="bg-card border border-border p-10 rounded-xl text-center">
-            <ShieldCheck className="w-12 h-12 text-primary mx-auto mb-4" />
-            <h3 className="text-2xl font-bold mb-2">AI Confidence Indicator</h3>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              Not sure if the AI guessed a corner? TourVision highlights exactly what is real photography and what is AI-generated fill, ensuring complete transparency for your buyers.
-            </p>
+        </section>
+
+        {/* Stats */}
+        <section className="container mx-auto px-6 max-w-5xl mt-16">
+          <div className="bg-primary text-primary-foreground rounded-2xl p-10 grid md:grid-cols-3 gap-8 text-center">
+            {[
+              { val: "3 min", label: "Average processing time" },
+              { val: "94%", label: "AI confidence score" },
+              { val: "10×", label: "More buyer engagement" },
+            ].map(({ val, label }) => (
+              <div key={label}>
+                <div className="text-5xl font-display font-bold mb-1">{val}</div>
+                <div className="text-primary-foreground/70 text-sm">{label}</div>
+              </div>
+            ))}
           </div>
         </section>
 
         {/* Pricing */}
-        <section id="pricing" className="container mx-auto px-6 py-24">
-           <h2 className="text-4xl font-serif font-bold text-center mb-16">Simple, <span className="text-primary">powerful</span> pricing.</h2>
-           <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto items-center">
-              <div className="bg-card border border-border p-8 rounded-xl">
-                <h3 className="text-xl font-bold mb-2">Free</h3>
-                <div className="text-4xl font-serif font-bold mb-6">$0</div>
-                <ul className="flex flex-col gap-3 mb-8 text-muted-foreground text-sm">
-                  <li className="flex gap-2"><CheckCircle2 className="w-4 h-4 text-primary shrink-0" /> 1 Free Tour</li>
-                  <li className="flex gap-2"><CheckCircle2 className="w-4 h-4 text-primary shrink-0" /> Standard Processing</li>
-                  <li className="flex gap-2"><CheckCircle2 className="w-4 h-4 text-primary shrink-0" /> TourVision Watermark</li>
-                </ul>
-                <Link href="/signup">
-                  <Button className="w-full" variant="outline">Start Free</Button>
-                </Link>
-              </div>
-              <div className="bg-foreground text-background p-8 rounded-xl relative scale-105 shadow-2xl">
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-background text-foreground text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider border border-border">Most Popular</div>
-                <h3 className="text-xl font-bold mb-2 text-background">Pro</h3>
-                <div className="text-4xl font-serif font-bold mb-6 text-background">$149<span className="text-lg opacity-60 font-sans font-normal">/mo</span></div>
-                <ul className="flex flex-col gap-3 mb-8 text-background/70 text-sm">
-                  <li className="flex gap-2"><CheckCircle2 className="w-4 h-4 text-background shrink-0" /> 15 Tours per month</li>
-                  <li className="flex gap-2"><CheckCircle2 className="w-4 h-4 text-background shrink-0" /> Priority Processing</li>
-                  <li className="flex gap-2"><CheckCircle2 className="w-4 h-4 text-background shrink-0" /> Custom Agency Branding</li>
-                  <li className="flex gap-2"><CheckCircle2 className="w-4 h-4 text-background shrink-0" /> Analytics Dashboard</li>
-                </ul>
-                <Link href="/signup">
-                  <Button className="w-full bg-background text-foreground hover:bg-background/90 font-bold">Upgrade to Pro</Button>
-                </Link>
-              </div>
-              <div className="bg-card border border-border p-8 rounded-xl">
-                <h3 className="text-xl font-bold mb-2">Unlimited</h3>
-                <div className="text-4xl font-serif font-bold mb-6">$299<span className="text-lg text-muted-foreground font-sans font-normal">/mo</span></div>
-                <ul className="flex flex-col gap-3 mb-8 text-muted-foreground text-sm">
-                  <li className="flex gap-2"><CheckCircle2 className="w-4 h-4 text-primary shrink-0" /> Unlimited Tours</li>
-                  <li className="flex gap-2"><CheckCircle2 className="w-4 h-4 text-primary shrink-0" /> Highest Priority Processing</li>
-                  <li className="flex gap-2"><CheckCircle2 className="w-4 h-4 text-primary shrink-0" /> API Access</li>
-                </ul>
-                <Link href="/signup">
-                  <Button className="w-full" variant="outline">Contact Sales</Button>
-                </Link>
-              </div>
-           </div>
-        </section>
+        <section id="pricing" className="container mx-auto px-6 max-w-4xl mt-28">
+          <motion.div
+            initial={{ opacity: 0, y: 32 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
+            className="text-center mb-16"
+          >
+            <p className="text-xs font-mono text-muted-foreground uppercase tracking-widest mb-3">Pricing</p>
+            <h2 className="text-4xl font-display font-bold">SIMPLE PLANS</h2>
+          </motion.div>
 
-        <section className="container mx-auto px-6 py-24 max-w-3xl">
-          <h2 className="text-3xl font-serif font-bold text-center mb-10">Frequently Asked Questions</h2>
-          <Accordion type="single" collapsible className="w-full">
-            <AccordionItem value="item-1" className="border-border">
-              <AccordionTrigger className="hover:text-primary">What platforms do you support?</AccordionTrigger>
-              <AccordionContent className="text-muted-foreground">Any platform. Just paste the public URL and our system will extract the photos. Works best with Zillow, Airbnb, Bayut, and Property Finder.</AccordionContent>
-            </AccordionItem>
-            <AccordionItem value="item-2" className="border-border">
-              <AccordionTrigger className="hover:text-primary">How long does processing take?</AccordionTrigger>
-              <AccordionContent className="text-muted-foreground">Typically between 20-30 minutes depending on the number of photos and rooms.</AccordionContent>
-            </AccordionItem>
-            <AccordionItem value="item-3" className="border-border">
-              <AccordionTrigger className="hover:text-primary">How accurate is the AI?</AccordionTrigger>
-              <AccordionContent className="text-muted-foreground">TourVision's spatial AI engine creates photorealistic geometry based on your photos. Areas not captured in photos are AI-estimated, which you can clearly see using our Confidence Indicator.</AccordionContent>
-            </AccordionItem>
-          </Accordion>
+          <div className="grid md:grid-cols-3 gap-6">
+            {[
+              { name: "Free", price: "$0", tours: "1 tour/mo", features: ["1 3D tour per month", "Watermarked", "Shareable link"] },
+              { name: "Pro", price: "$29", tours: "15 tours/mo", features: ["15 tours per month", "No watermark", "Analytics dashboard", "Priority processing"], highlight: true },
+              { name: "Unlimited", price: "$79", tours: "Unlimited", features: ["Unlimited tours", "White-label", "API access", "Dedicated support"] },
+            ].map(({ name, price, features, highlight }) => (
+              <motion.div
+                key={name}
+                initial={{ opacity: 0, y: 24 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.4 }}
+                className={`rounded-2xl border p-8 flex flex-col ${highlight ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border"}`}
+              >
+                <div className="mb-6">
+                  <div className={`text-xs font-mono uppercase tracking-widest mb-2 ${highlight ? "text-primary-foreground/60" : "text-muted-foreground"}`}>{name}</div>
+                  <div className="text-4xl font-display font-bold">{price}<span className="text-base font-normal opacity-60">/mo</span></div>
+                </div>
+                <ul className="space-y-2.5 flex-1 mb-8">
+                  {features.map((f) => (
+                    <li key={f} className={`flex items-center gap-2 text-sm ${highlight ? "text-primary-foreground/80" : "text-muted-foreground"}`}>
+                      <CheckCircle2 className="w-4 h-4 shrink-0" /> {f}
+                    </li>
+                  ))}
+                </ul>
+                <Button
+                  onClick={handleCreate}
+                  className={`w-full font-bold ${highlight ? "bg-primary-foreground text-primary hover:bg-primary-foreground/90" : "bg-primary text-primary-foreground hover:bg-primary/90"}`}
+                >
+                  Get Started <ArrowRight className="w-4 h-4 ml-1" />
+                </Button>
+              </motion.div>
+            ))}
+          </div>
         </section>
-
       </main>
-      <footer className="border-t border-border bg-card pt-16 pb-8">
-        <div className="container mx-auto px-6 grid md:grid-cols-4 gap-12 mb-12">
-          <div>
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-3 h-3 rounded-full bg-primary" />
-              <span className="font-serif font-bold text-xl tracking-tight">TourVision</span>
-            </div>
-            <p className="text-muted-foreground text-sm">The cockpit for elite MENA real estate agents.</p>
+
+      <footer className="border-t border-border py-10">
+        <div className="container mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2 font-display font-bold text-foreground">
+            <div className="w-2.5 h-2.5 rounded-full bg-primary" />
+            TOURVISION
           </div>
-          <div>
-            <h4 className="font-bold mb-4 font-mono text-sm uppercase">Product</h4>
-            <ul className="flex flex-col gap-2 text-sm text-muted-foreground">
-              <li><a href="#" className="hover:text-primary">Features</a></li>
-              <li><a href="#" className="hover:text-primary">Pricing</a></li>
-              <li><a href="#" className="hover:text-primary">Case Studies</a></li>
-            </ul>
-          </div>
-          <div>
-            <h4 className="font-bold mb-4 font-mono text-sm uppercase">Support</h4>
-            <ul className="flex flex-col gap-2 text-sm text-muted-foreground">
-              <li><a href="#" className="hover:text-primary">Documentation</a></li>
-              <li><a href="#" className="hover:text-primary">Contact</a></li>
-              <li><a href="#" className="hover:text-primary">API Status</a></li>
-            </ul>
-          </div>
-          <div>
-            <h4 className="font-bold mb-4 font-mono text-sm uppercase">Join 2,800+ agents</h4>
-            <div className="flex gap-2">
-              <Input placeholder="Email address" className="bg-background" />
-              <Button className="bg-primary text-primary-foreground font-bold">Subscribe</Button>
-            </div>
-          </div>
-        </div>
-        <div className="container mx-auto px-6 border-t border-border pt-8 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-muted-foreground">
-          <p>© {new Date().getFullYear()} TourVision Inc. All rights reserved.</p>
-          <div className="flex gap-4">
-            <a href="#" className="hover:text-primary">Privacy Policy</a>
-            <a href="#" className="hover:text-primary">Terms of Service</a>
-          </div>
+          <p>© {new Date().getFullYear()} TourVision. All rights reserved.</p>
         </div>
       </footer>
     </div>
