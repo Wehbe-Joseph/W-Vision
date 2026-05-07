@@ -250,20 +250,29 @@ export default function NewTour() {
             exit={{ opacity: 0, y: -20 }}
             className="w-full max-w-2xl"
           >
-            <div className="mb-8 text-center">
-              <h2 className="text-3xl font-display font-bold mb-2">Create New Tour</h2>
-              <p className="text-muted-foreground">
+            <div className="mb-6">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="w-2 h-2 bg-primary" />
+                <span className="text-xs font-mono font-bold uppercase tracking-widest text-muted-foreground">New Tour</span>
+              </div>
+              <h2 className="text-4xl font-serif mb-1">CREATE NEW TOUR</h2>
+              <p className="text-muted-foreground text-sm">
                 Paste a listing URL, upload photos, or both for the best results.
               </p>
             </div>
 
-            <div className="bg-card border border-border rounded-2xl shadow-lg overflow-hidden">
+            <div className="bg-card border-2 border-foreground shadow-[6px_6px_0px_0px_#1A1714] overflow-hidden">
+              {/* Window titlebar */}
+              <div className="flex items-center gap-2 px-4 py-2.5 border-b-2 border-foreground bg-foreground">
+                <span className="w-2 h-2 bg-primary" />
+                <span className="text-xs font-mono font-bold uppercase tracking-widest text-background">Tour Generator</span>
+              </div>
               {/* URL section */}
-              <div className="p-6 border-b border-border">
-                <label className="text-sm font-medium mb-3 flex items-center gap-2">
-                  <Link2 className="w-4 h-4" /> Listing URL
+              <div className="p-6 border-b-2 border-foreground">
+                <label className="text-xs font-mono font-bold uppercase tracking-widest mb-3 flex items-center gap-2 text-muted-foreground">
+                  <Link2 className="w-3.5 h-3.5" /> Listing URL
                 </label>
-                <div className="flex items-center gap-2 px-3 h-12 bg-background border border-border rounded-xl focus-within:ring-2 focus-within:ring-primary/30 transition-all">
+                <div className="flex items-center gap-2 px-3 h-11 bg-background border-2 border-foreground focus-within:border-primary transition-all">
                   <input
                     type="url"
                     placeholder="https://zillow.com/homedetails/…"
@@ -307,19 +316,19 @@ export default function NewTour() {
               </div>
 
               {/* Photos section */}
-              <div className="p-6 border-b border-border">
-                <label className="text-sm font-medium mb-3 flex items-center gap-2">
-                  <ImagePlus className="w-4 h-4" /> Extra Photos
-                  <span className="text-xs font-normal text-muted-foreground">
+              <div className="p-6 border-b-2 border-foreground">
+                <label className="text-xs font-mono font-bold uppercase tracking-widest mb-3 flex items-center gap-2 text-muted-foreground">
+                  <ImagePlus className="w-3.5 h-3.5" /> Extra Photos
+                  <span className="text-xs font-normal text-muted-foreground normal-case tracking-normal">
                     (optional — improves 3D quality)
                   </span>
                 </label>
 
                 <div
-                  className={`border-2 border-dashed rounded-xl transition-all cursor-pointer ${
+                  className={`border-2 border-dashed transition-all cursor-pointer ${
                     dragging
-                      ? "border-primary bg-primary/5 scale-[0.99]"
-                      : "border-border hover:border-primary/40 hover:bg-accent/30"
+                      ? "border-primary bg-primary/5"
+                      : "border-foreground/30 hover:border-foreground hover:bg-accent/30"
                   }`}
                   onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
                   onDragLeave={() => setDragging(false)}
@@ -331,7 +340,7 @@ export default function NewTour() {
                       {photos.map((photo) => (
                         <div
                           key={photo.name}
-                          className="relative group w-16 h-16 rounded-lg overflow-hidden border border-border shrink-0"
+                          className="relative group w-16 h-16 overflow-hidden border-2 border-foreground shrink-0"
                         >
                           <img src={photo.dataUrl} alt={photo.name} className="w-full h-full object-cover" />
                           <button
@@ -380,14 +389,14 @@ export default function NewTour() {
                     className="overflow-hidden"
                   >
                     <div
-                      className="px-6 py-3 bg-primary/5 border-b border-border flex items-center gap-3 cursor-pointer hover:bg-primary/10 transition-colors"
+                      className="px-6 py-3 bg-[#00C853]/10 border-l-4 border-[#00C853] flex items-center gap-3 cursor-pointer hover:bg-[#00C853]/20 transition-colors"
                       onClick={() => fileRef.current?.click()}
                     >
-                      <Sparkles className="w-4 h-4 text-primary shrink-0" />
-                      <p className="text-sm text-primary font-medium flex-1">
+                      <Sparkles className="w-4 h-4 text-[#00C853] shrink-0" />
+                      <p className="text-sm font-bold uppercase tracking-wide flex-1">
                         Add extra photos to improve 3D quality
                       </p>
-                      <ChevronRight className="w-4 h-4 text-primary shrink-0" />
+                      <ChevronRight className="w-4 h-4 text-foreground shrink-0" />
                     </div>
                   </motion.div>
                 )}
@@ -422,7 +431,8 @@ export default function NewTour() {
                 <Button
                   onClick={handleGenerate}
                   disabled={!canSubmit || generateMutation.isPending || isUploading}
-                  className="w-full h-12 bg-primary text-primary-foreground text-base font-bold hover:bg-primary/90 disabled:opacity-40"
+                  size="lg"
+                  className="w-full"
                 >
                   {isUploading ? (
                     <><Loader2 className="mr-2 w-4 h-4 animate-spin" /> Uploading photos…</>

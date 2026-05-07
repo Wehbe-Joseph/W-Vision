@@ -60,115 +60,114 @@
   --font-serif: var(--app-font-serif);
   --font-mono: var(--app-font-mono);
 
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
   --radius-xl: calc(var(--radius) + 4px);
 }
 
 /* ──────────────────────────────────────────────────────────
-   TourVision — Warm Cream / Beige Design System
-   Ref: warm off-white #EDE8E1 bg, near-black #1A1714 text
+   TourVision — Editorial Design System
+   Inspired by bold editorial tech branding
    Fonts: Bebas Neue (display), Space Grotesk (body), Space Mono (mono)
    ────────────────────────────────────────────────────────── */
 
 :root {
-  --button-outline: rgba(26,23,20, .12);
-  --badge-outline: rgba(26,23,20, .07);
+  --button-outline: rgba(26,23,20, .18);
+  --badge-outline: rgba(26,23,20, .10);
   --opaque-button-border-intensity: -8;
   --elevate-1: rgba(26,23,20, .04);
   --elevate-2: rgba(26,23,20, .08);
 
-  /* Background: warm cream #EDE8E1 → HSL 38 22% 90% */
+  /* Background: warm cream */
   --background: 38 22% 90%;
-  /* Foreground: warm near-black #1A1714 → HSL 24 12% 9% */
   --foreground: 24 12% 9%;
-  /* Border: warm tan #CEC5BA → HSL 30 15% 77% */
-  --border: 30 15% 77%;
+  --border: 24 12% 20%;
 
-  /* Card: slightly warmer/lighter than bg #EAE4DC → HSL 36 19% 88% */
+  /* Card */
   --card: 36 19% 88%;
   --card-foreground: 24 12% 9%;
-  --card-border: 30 15% 77%;
+  --card-border: 24 12% 20%;
 
-  /* Sidebar: same warm tone #E4DDD5 → HSL 30 17% 86% */
+  /* Sidebar */
   --sidebar: 30 17% 86%;
   --sidebar-foreground: 24 12% 9%;
-  --sidebar-border: 30 15% 77%;
-  /* Sidebar primary = near-black (dark pill/active state) */
+  --sidebar-border: 24 12% 20%;
   --sidebar-primary: 24 12% 9%;
   --sidebar-primary-foreground: 38 22% 90%;
   --sidebar-accent: 36 19% 84%;
   --sidebar-accent-foreground: 24 12% 9%;
   --sidebar-ring: 24 12% 9%;
 
-  /* Popover */
   --popover: 38 22% 92%;
   --popover-foreground: 24 12% 9%;
-  --popover-border: 30 15% 77%;
+  --popover-border: 24 12% 20%;
 
-  /* Primary: near-black (dark button) */
-  --primary: 24 12% 9%;
-  --primary-foreground: 38 22% 90%;
+  /* Primary: HOT PINK for CTAs */
+  --primary: 340 100% 50%;
+  --primary-foreground: 0 0% 100%;
 
-  /* Secondary: mid-beige button */
+  /* Secondary: mid-beige */
   --secondary: 36 19% 84%;
   --secondary-foreground: 24 12% 9%;
 
-  /* Muted: lighter warm */
   --muted: 36 18% 93%;
   --muted-foreground: 24 8% 45%;
 
-  /* Accent: a shade darker than card */
   --accent: 30 15% 82%;
   --accent-foreground: 24 12% 9%;
 
-  /* Destructive */
   --destructive: 0 65% 42%;
   --destructive-foreground: 38 22% 90%;
 
-  /* Input border */
-  --input: 30 15% 70%;
-  --ring: 24 12% 9%;
+  --input: 24 12% 20%;
+  --ring: 340 100% 50%;
 
-  /* Charts: warm tones */
-  --chart-1: 24 12% 9%;
-  --chart-2: 30 40% 40%;
-  --chart-3: 200 40% 40%;
-  --chart-4: 38 70% 55%;
+  --chart-1: 340 100% 50%;
+  --chart-2: 152 100% 35%;
+  --chart-3: 200 70% 45%;
+  --chart-4: 48 100% 48%;
   --chart-5: 0 65% 42%;
 
   /* Fonts */
   --app-font-sans: 'Space Grotesk', sans-serif;
   --app-font-serif: 'Bebas Neue', sans-serif;
   --app-font-mono: 'Space Mono', monospace;
-  --radius: 0.375rem;
 
-  /* Shadows — warm-tinted */
-  --shadow-2xs: 0px 1px 2px 0px rgba(26,23,20,0.08);
-  --shadow-xs: 0px 2px 4px 0px rgba(26,23,20,0.10);
-  --shadow-sm: 0px 2px 4px 0px rgba(26,23,20,0.12), 0px 1px 2px -1px rgba(26,23,20,0.08);
-  --shadow: 0px 4px 8px 0px rgba(26,23,20,0.12), 0px 2px 4px -1px rgba(26,23,20,0.08);
-  --shadow-md: 0px 6px 16px 0px rgba(26,23,20,0.14), 0px 2px 4px -1px rgba(26,23,20,0.10);
-  --shadow-lg: 0px 8px 24px 0px rgba(26,23,20,0.16), 0px 4px 6px -1px rgba(26,23,20,0.10);
-  --shadow-xl: 0px 12px 40px 0px rgba(26,23,20,0.18), 0px 8px 10px -1px rgba(26,23,20,0.10);
-  --shadow-2xl: 0px 24px 64px 0px rgba(26,23,20,0.22);
+  /* Sharp corners — editorial style */
+  --radius: 2px;
+
+  /* Accent colors (raw hex for use in arbitrary values) */
+  --green-accent: #00C853;
+  --yellow-accent: #FFD000;
+  --pink-accent: #FF0055;
+  --ink: #1A1714;
+
+  /* Editorial heavy border */
+  --border-heavy: 2px solid #1A1714;
+
+  /* Shadows */
+  --shadow-2xs: 2px 2px 0px 0px rgba(26,23,20,0.20);
+  --shadow-xs:  3px 3px 0px 0px rgba(26,23,20,0.20);
+  --shadow-sm:  4px 4px 0px 0px rgba(26,23,20,0.20);
+  --shadow:     4px 4px 0px 0px rgba(26,23,20,1);
+  --shadow-md:  6px 6px 0px 0px rgba(26,23,20,1);
+  --shadow-lg:  8px 8px 0px 0px rgba(26,23,20,1);
+  --shadow-xl:  10px 10px 0px 0px rgba(26,23,20,1);
+  --shadow-2xl: 12px 12px 0px 0px rgba(26,23,20,1);
 
   --tracking-normal: 0em;
   --spacing: 0.25rem;
 
   --sidebar-primary-border: hsl(var(--sidebar-primary));
-  --sidebar-primary-border: hsl(from hsl(var(--sidebar-primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
   --sidebar-accent-border: hsl(var(--sidebar-accent));
-  --sidebar-accent-border: hsl(from hsl(var(--sidebar-accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
-  --primary-border: hsl(var(--primary));
-  --primary-border: hsl(from hsl(var(--primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --primary-border: #cc0044;
   --secondary-border: hsl(var(--secondary));
   --secondary-border: hsl(from hsl(var(--secondary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
   --muted-border: hsl(var(--muted));
   --muted-border: hsl(from hsl(var(--muted)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
   --accent-border: hsl(var(--accent));
-  --accent-border: hsl(from hsl(var(--accent)) h s calc(l + var(--opaque-button-border-idense)) / alpha);
+  --accent-border: hsl(from hsl(var(--accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
   --destructive-border: hsl(var(--destructive));
   --destructive-border: hsl(from hsl(var(--destructive)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
 }
@@ -183,44 +182,69 @@
     font-feature-settings: "kern" 1, "liga" 1;
   }
 
-  /* Bebas Neue for all display/heading text */
   h1, h2, h3, h4, h5, h6,
   .font-serif {
     font-family: 'Bebas Neue', sans-serif;
     letter-spacing: 0.02em;
   }
 
-  /* Space Mono for code/mono */
   code, kbd, pre, .font-mono {
     font-family: 'Space Mono', monospace;
   }
 }
 
-/* ──────────────────────────────────────────────────────────
-   Utility classes
-   ────────────────────────────────────────────────────────── */
 @layer utilities {
-  /* Subtle warm shadow that replaces glow effects */
-  .glow-primary {
-    box-shadow: 0 4px 20px rgba(26,23,20,0.25), 0 1px 4px rgba(26,23,20,0.15);
+  /* Editorial hard shadow (offset, no blur) */
+  .shadow-hard-sm {
+    box-shadow: 3px 3px 0 0 #1A1714;
   }
-  .glow-primary-sm {
-    box-shadow: 0 2px 8px rgba(26,23,20,0.18);
+  .shadow-hard {
+    box-shadow: 4px 4px 0 0 #1A1714;
   }
-  .text-glow {
-    text-shadow: none;
+  .shadow-hard-lg {
+    box-shadow: 6px 6px 0 0 #1A1714;
   }
 
-  /* Warm subtle grid overlay */
+  /* Editorial border */
+  .border-ink {
+    border: 2px solid #1A1714;
+  }
+  .border-ink-1 {
+    border: 1px solid #1A1714;
+  }
+
+  /* Green dot label */
+  .label-dot::before {
+    content: "■";
+    color: #00C853;
+    margin-right: 0.4rem;
+    font-size: 0.6em;
+    vertical-align: middle;
+  }
+
+  /* Pink dot label */
+  .label-dot-pink::before {
+    content: "■";
+    color: #FF0055;
+    margin-right: 0.4rem;
+    font-size: 0.6em;
+    vertical-align: middle;
+  }
+
+  /* Yellow dot label */
+  .label-dot-yellow::before {
+    content: "■";
+    color: #FFD000;
+    margin-right: 0.4rem;
+    font-size: 0.6em;
+    vertical-align: middle;
+  }
+
+  /* Subtle warm grid */
   .bg-grid {
-    background-image: linear-gradient(rgba(26,23,20,0.04) 1px, transparent 1px),
-                      linear-gradient(90deg, rgba(26,23,20,0.04) 1px, transparent 1px);
-    background-size: 50px 50px;
-  }
-
-  /* Warm radial gradient */
-  .gradient-radial {
-    background: radial-gradient(ellipse at center, rgba(26,23,20,0.05) 0%, transparent 70%);
+    background-image: linear-gradient(rgba(26,23,20,0.05) 1px, transparent 1px),
+                      linear-gradient(90deg, rgba(26,23,20,0.05) 1px, transparent 1px);
+    background-size: 40px 40px;
   }
 
   input[type="search"]::-webkit-search-cancel-button {

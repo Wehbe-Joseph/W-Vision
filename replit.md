@@ -19,10 +19,19 @@ Full-stack SaaS app that converts property listing URLs into 3D virtual tours po
 
 ## Design System
 
+Editorial bold style inspired by Tavus.io. Heavy 2px black borders, offset shadows, sharp corners.
+
 - **Background**: warm cream/beige ~#EDE8E1 (HSL 38 22% 90%)
 - **Foreground**: near-black warm brown ~#1A1714 (HSL 24 12% 9%)
-- **Primary**: near-black (dark buttons/accents on the light surface)
+- **Primary**: Hot pink #FF0055 (HSL 340 100% 50%) — main CTA color
+- **Green accent**: #00C853 — section label dots, success badges
+- **Yellow accent**: #FFD000 — secondary action buttons
+- **Borders**: 2px solid #1A1714 (heavy editorial borders on all cards/buttons)
+- **Shadows**: Offset hard shadow `4px 4px 0px 0px #1A1714` (no blur) on buttons/cards
+- **Radius**: 2px (nearly square — no rounded corners)
 - **Fonts**: Bebas Neue (display/headings), Space Grotesk (body/sans), Space Mono (mono)
+- **OS Window Cards**: Cards have black title bars with colored dot + uppercase label
+- **Button variants**: default (pink), outline (cream), green, yellow, ghost
 - **Theme**: Light warm cream — single theme, no dark mode toggle
 
 ## Key Commands
