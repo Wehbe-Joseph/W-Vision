@@ -29,7 +29,9 @@ function detectPlatform(url: string): string {
 // POST /generate-tour
 router.post("/generate-tour", async (req, res) => {
   try {
-    const userId = req.headers["x-user-id"] as string | undefined;
+    const userId =
+      (req.user as { id?: string } | undefined)?.id ??
+      (req.headers["x-user-id"] as string | undefined);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
     const parsed = GenerateTourBody.safeParse(req.body);
@@ -171,7 +173,9 @@ router.post("/generate-tour", async (req, res) => {
 // GET /generate-tour/:tourId/status — richer status for generation flow
 router.get("/generate-tour/:tourId/status", async (req, res) => {
   try {
-    const userId = req.headers["x-user-id"] as string | undefined;
+    const userId =
+      (req.user as { id?: string } | undefined)?.id ??
+      (req.headers["x-user-id"] as string | undefined);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
     const tour = await db.query.toursTable.findFirst({

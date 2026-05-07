@@ -134,14 +134,50 @@ export default function NewTour() {
     [addFiles],
   );
 
+  const [isUploading, setIsUploading] = useState(false);
+
+  function dataUrlToBlob(dataUrl: string): Blob {
+    const [header, data] = dataUrl.split(",");
+    const mime = header.match(/:(.*?);/)?.[1] ?? "image/jpeg";
+    const bytes = atob(data);
+    const arr = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+    return new Blob([arr], { type: mime });
+  }
+
   const handleGenerate = async () => {
     if (!url.trim() && !photos.length) return;
     try {
+      let uploadedUrls: string[] = [];
+
+      if (photos.length > 0) {
+        setIsUploading(true);
+        const formData = new FormData();
+        for (const photo of photos) {
+          const blob = dataUrlToBlob(photo.dataUrl);
+          formData.append("images", blob, photo.name);
+        }
+        const uploadRes = await fetch("/api/images/upload", {
+          method: "POST",
+          credentials: "include",
+          body: formData,
+        });
+        setIsUploading(false);
+        if (uploadRes.ok) {
+          const uploadData = (await uploadRes.json()) as { images: { url: string }[] };
+          uploadedUrls = uploadData.images.map((i) => i.url);
+        } else {
+          toast({ title: "Upload failed", description: "Could not upload photos — check your connection.", variant: "destructive" });
+          return;
+        }
+      }
+
+      const allImageUrls = [...apifyImageUrls, ...uploadedUrls];
+
       const res = await generateMutation.mutateAsync({
         data: {
           listingUrl: url.trim() || "manual-upload",
-          imageUrls: apifyImageUrls,
-          uploadedImages: photos.map((p) => ({ name: p.name, dataUrl: p.dataUrl })),
+          imageUrls: allImageUrls,
         },
       });
       setResult({
@@ -158,6 +194,7 @@ export default function NewTour() {
       clearPendingTour();
       setStep(2);
     } catch {
+      setIsUploading(false);
       toast({ title: "Error", description: "Failed to start generation", variant: "destructive" });
     }
   };
@@ -233,7 +270,7 @@ export default function NewTour() {
                     className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
                     value={url}
                     onChange={(e) => setUrl(e.target.value)}
-                    disabled={generateMutation.isPending}
+                    disabled={generateMutation.isPending || isUploading}
                   />
                   {url && (
                     <button onClick={() => setUrl("")} className="text-muted-foreground hover:text-foreground">
@@ -384,10 +421,12 @@ export default function NewTour() {
               <div className="p-6">
                 <Button
                   onClick={handleGenerate}
-                  disabled={!canSubmit || generateMutation.isPending}
+                  disabled={!canSubmit || generateMutation.isPending || isUploading}
                   className="w-full h-12 bg-primary text-primary-foreground text-base font-bold hover:bg-primary/90 disabled:opacity-40"
                 >
-                  {generateMutation.isPending ? (
+                  {isUploading ? (
+                    <><Loader2 className="mr-2 w-4 h-4 animate-spin" /> Uploading photos…</>
+                  ) : generateMutation.isPending ? (
                     <><Loader2 className="mr-2 w-4 h-4 animate-spin" /> Starting generation…</>
                   ) : (
                     "Generate 3D Tour →"

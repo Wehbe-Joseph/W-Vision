@@ -7,6 +7,7 @@ import generateTourRouter from "./generate-tour";
 import leadsRouter from "./leads";
 import analyticsRouter from "./analytics";
 import flagsRouter from "./flags";
+import imagesRouter from "./images";
 
 const router: IRouter = Router();
 
@@ -18,5 +19,6 @@ router.use(generateTourRouter);
 router.use(leadsRouter);
 router.use(analyticsRouter);
 router.use(flagsRouter);
+router.use(imagesRouter);
 
 export default router;

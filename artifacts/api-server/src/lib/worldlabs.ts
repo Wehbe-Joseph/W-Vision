@@ -76,12 +76,35 @@ export async function createWorld(imageUrls: string[]): Promise<CreateWorldResul
     throw new Error("At least one image URL is required");
   }
 
-  const body = imageUrls.length === 1
-    ? { image_url: primaryImage }
-    : {
-        image_url: primaryImage,
-        extra_images: imageUrls.slice(1, 10).map((url) => ({ url })),
-      };
+  // Build the body — multi-image uses multi_image_prompt format from the Marble frontend
+  const body =
+    imageUrls.length === 1
+      ? {
+          generation_input: {
+            prompt: {
+              type: "image",
+              image_prompt: { uri: primaryImage },
+            },
+          },
+          model: "marble-1.1",
+          visibility: "private",
+          layout: "auto",
+        }
+      : {
+          generation_input: {
+            prompt: {
+              type: "multi_image",
+              multi_image_prompt: imageUrls.slice(0, 8).map((url) => ({
+                uri: url,
+                azimuth: null,
+              })),
+            },
+            reconstruction: true,
+          },
+          model: "marble-1.1",
+          visibility: "private",
+          layout: "auto",
+        };
 
   const res = await fetch(`${WORLDLABS_API_BASE}/api/v1/worlds`, {
     method: "POST",
