@@ -1,0 +1,8 @@
+id = "apify-server"
+kind = "api"
+title = "Apify Image Server"
+
+[[services]]
+name = "Apify Image Server"
+localPort = 3000
+paths = ["/apify-server"]
