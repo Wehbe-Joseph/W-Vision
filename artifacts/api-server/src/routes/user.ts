@@ -29,6 +29,7 @@ router.get("/user/profile", async (req, res) => {
         .insert(profilesTable)
         .values({
           id: userId,
+          replitUserId: userId,
           fullName: (req.headers["x-user-name"] as string) || "User",
           email: (req.headers["x-user-email"] as string) || "",
         })

@@ -4,6 +4,7 @@ import { toursTable, profilesTable, tourPhotosTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { randomBytes } from "crypto";
 import { createWorld, schedulePoll } from "../lib/worldlabs";
+import { storeImage, getPublicBaseUrl } from "../lib/imageStore";
 import { GenerateTourBody } from "@workspace/api-zod";
 
 const router = Router();
@@ -65,11 +66,26 @@ router.post("/generate-tour", async (req, res) => {
     // Build the final image URL list
     const allImageUrls = [...imageUrls];
 
-    // Store uploaded images as tourPhoto records later (they're base64 data URLs)
-    // We pass only http(s) URLs to WorldLabs directly
-    const publicImageUrls = allImageUrls.filter(
-      (u) => u.startsWith("http://") || u.startsWith("https://")
-    );
+    // Convert any base64 uploaded images into temporary public URLs so WorldLabs can fetch them
+    const baseUrl = getPublicBaseUrl(req as Parameters<typeof getPublicBaseUrl>[0]);
+    const uploadedPublicUrls: string[] = uploadedImages.slice(0, 8).flatMap((img) => {
+      try {
+        const [meta, b64] = img.dataUrl.split(",");
+        if (!b64) return [];
+        const mimeType = meta.split(";")[0].replace("data:", "") || "image/jpeg";
+        const buffer = Buffer.from(b64, "base64");
+        const id = storeImage(buffer, mimeType);
+        return [`${baseUrl}/api/images/${id}`];
+      } catch {
+        return [];
+      }
+    });
+
+    // Merge explicit public URLs + stored uploaded image URLs
+    const publicImageUrls = [
+      ...allImageUrls.filter((u) => u.startsWith("http://") || u.startsWith("https://")),
+      ...uploadedPublicUrls,
+    ];
 
     const shareToken = generateShareToken();
     const platform = detectPlatform(listingUrl);
@@ -113,17 +129,8 @@ router.post("/generate-tour", async (req, res) => {
       await db.insert(tourPhotosTable).values(photoRows);
     }
 
-    // Attempt WorldLabs world generation
-    if (publicImageUrls.length === 0 && uploadedImages.length > 0) {
-      // Only uploaded (base64) images — no public URLs for WorldLabs
-      // Fall back to simulation for now
-      req.log.info({ tourId: tour.id }, "No public image URLs; using simulation");
-      await simulateTourProcessing(tour.id, userId);
-      return res.json({ tourId: tour.id, shareToken: tour.shareToken! });
-    }
-
+    // If no images at all, simulate
     if (publicImageUrls.length === 0) {
-      // No images at all — still simulate
       await simulateTourProcessing(tour.id, userId);
       return res.json({ tourId: tour.id, shareToken: tour.shareToken! });
     }

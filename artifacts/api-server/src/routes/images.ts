@@ -46,7 +46,8 @@ router.post("/images/upload", upload.array("images", 20), (req, res) => {
 router.get("/images/:id", (req, res) => {
   const image = getImage(req.params.id);
   if (!image) {
-    return res.status(404).json({ error: "Image not found or expired" });
+    res.status(404).json({ error: "Image not found or expired" });
+    return;
   }
   res.setHeader("Content-Type", image.mimeType);
   res.setHeader("Cache-Control", "public, max-age=7200");

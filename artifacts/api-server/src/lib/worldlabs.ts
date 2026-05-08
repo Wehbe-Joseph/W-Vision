@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { logger } from "./logger";
 
 const WORLDLABS_API_BASE = "https://api.worldlabs.ai";
-const WORLDLABS_API_KEY = process.env.WORLDLABSMARBLE_API_KEY ?? "";
+const WORLDLABS_API_KEY = process.env.WORLD_LABS_API_KEY ?? "";
 const POLL_INTERVAL_MS = 15_000;
 const MAX_RETRIES = 3;
 const MAX_POLL_DURATION_MS = 30 * 60 * 1000; // 30 min timeout
