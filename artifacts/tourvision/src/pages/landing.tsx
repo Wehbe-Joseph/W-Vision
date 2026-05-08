@@ -302,73 +302,7 @@ export default function Landing() {
                 draggable={false}
               />
 
-              {/* WVISION OS window overlay — covers the center of the image */}
-              <div
-                className="absolute hidden sm:flex flex-col border-2 border-foreground shadow-[8px_8px_0px_0px_#1A1714]"
-                style={{ left: "14%", width: "43%", top: "2%", bottom: "8%" }}
-              >
-                {/* Title bar */}
-                <div className="flex items-center gap-2 px-3 py-2 bg-foreground border-b-2 border-foreground shrink-0">
-                  <span className="w-2 h-2 bg-primary" />
-                  <span className="text-xs font-mono font-bold uppercase tracking-widest text-background">Live Tour Preview</span>
-                  <div className="ml-auto flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-background/20" />
-                    <span className="w-2.5 h-2.5 rounded-full bg-background/20" />
-                    <span className="w-2.5 h-2.5 rounded-full bg-background/20" />
-                  </div>
-                </div>
 
-                {/* Animated sky content */}
-                <div className="flex-1 relative overflow-hidden hero-sky-bg">
-                  <div className="cloud cloud-1" />
-                  <div className="cloud cloud-2" />
-                  <div className="cloud cloud-3" />
-
-                  {/* Floating stat badge top-right */}
-                  <div className="absolute top-3 right-3 bg-foreground text-background px-2 py-1 border border-background/20">
-                    <span className="text-xs font-mono font-bold uppercase tracking-widest">AI: 94% ↑</span>
-                  </div>
-
-                  {/* Animated 3D floor plan graphic */}
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <motion.div
-                      animate={{ y: [0, -6, 0] }}
-                      transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
-                      className="border-2 border-foreground bg-card/90 p-4 shadow-[6px_6px_0px_0px_#1A1714]"
-                      style={{ width: "55%" }}
-                    >
-                      {/* Mini floor plan SVG */}
-                      <svg viewBox="0 0 200 120" className="w-full" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <rect x="2" y="2" width="196" height="116" rx="0" stroke="#1A1714" strokeWidth="2" fill="#EDE8E1"/>
-                        <rect x="10" y="10" width="80" height="60" stroke="#1A1714" strokeWidth="1.5" fill="none"/>
-                        <rect x="100" y="10" width="90" height="45" stroke="#1A1714" strokeWidth="1.5" fill="none"/>
-                        <rect x="10" y="80" width="50" height="32" stroke="#1A1714" strokeWidth="1.5" fill="none"/>
-                        <rect x="70" y="80" width="120" height="32" stroke="#1A1714" strokeWidth="1.5" fill="none"/>
-                        <rect x="100" y="65" width="90" height="10" stroke="#1A1714" strokeWidth="1" fill="none"/>
-                        <line x1="2" y1="75" x2="198" y2="75" stroke="#1A1714" strokeWidth="1" strokeDasharray="4 2"/>
-                        <rect x="30" y="20" width="20" height="16" rx="0" fill="#FF0055" opacity="0.6"/>
-                        <rect x="110" y="18" width="16" height="12" rx="0" fill="#00C853" opacity="0.5"/>
-                        <rect x="80" y="84" width="25" height="16" rx="0" fill="#FFD000" opacity="0.5"/>
-                        <text x="22" y="55" fontFamily="monospace" fontSize="7" fill="#1A1714" opacity="0.7">LIVING</text>
-                        <text x="106" y="32" fontFamily="monospace" fontSize="7" fill="#1A1714" opacity="0.7">KITCHEN</text>
-                        <text x="15" y="100" fontFamily="monospace" fontSize="6" fill="#1A1714" opacity="0.7">BATH</text>
-                        <text x="90" y="100" fontFamily="monospace" fontSize="7" fill="#1A1714" opacity="0.7">BEDROOM</text>
-                      </svg>
-                      <div className="mt-2 flex items-center justify-between">
-                        <span className="text-xs font-mono text-muted-foreground">123 Ocean View Dr.</span>
-                        <span className="text-xs font-mono font-bold text-[#00C853]">● LIVE</span>
-                      </div>
-                    </motion.div>
-                  </div>
-
-                  {/* Bottom property bar */}
-                  <div className="absolute bottom-0 left-0 right-0 border-t-2 border-foreground bg-card/95 px-3 py-2 flex items-center gap-3">
-                    <Home className="w-3.5 h-3.5 text-primary shrink-0" />
-                    <span className="text-xs font-mono font-bold flex-1 truncate">4 bed · 3 bath · 2,400 sqft</span>
-                    <span className="text-xs font-mono bg-primary text-white px-2 py-0.5 font-bold">3D</span>
-                  </div>
-                </div>
-              </div>
             </div>
           </motion.div>
 
