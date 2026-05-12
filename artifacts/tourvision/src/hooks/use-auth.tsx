@@ -147,6 +147,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
+    // Full navigation so protected routes unmount and user lands on marketing home.
+    const base = import.meta.env.BASE_URL || "/";
+    window.location.assign(new URL(base, window.location.origin).href);
   }, []);
 
   const value = useMemo<AuthContextValue>(
