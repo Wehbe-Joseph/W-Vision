@@ -1,0 +1,193 @@
+/**
+ * In-memory tour generation state.
+ *
+ * This is intentionally a parallel store to the `tours` Postgres table — when
+ * the DB is unreachable (wrong region, paused project, network blip…), the
+ * generation flow still works end-to-end: we create a tour id, kick off the
+ * Marble operation, and let the frontend poll the status endpoint backed by
+ * this map. The DB is best-effort.
+ *
+ * State here is process-local and lives until the api-server restarts. That's
+ * acceptable for the generation lifecycle — Marble completes in ~5 minutes.
+ */
+
+export type MemGenerationStatus = "queued" | "processing" | "completed" | "failed";
+
+export interface MemTour {
+  tourId: string;
+  userId: string;
+  shareToken: string;
+  listingUrl: string;
+  listingAddress: string;
+  listingPlatform: string;
+  operationId: string | null;
+  worldId: string | null;
+  generationStatus: MemGenerationStatus;
+  currentStage: string;
+  generatedTourUrl: string | null;
+  previewImageUrl: string | null;
+  errorMessage: string | null;
+  imageCount: number;
+  viewCount: number;
+  createdAt: number;
+  updatedAt: number;
+  completedAt: number | null;
+  /** ms epoch when the tour stops being viewable (null = never). */
+  expiresAt: number | null;
+  /** True once the expiry has passed and we've frozen the tour. */
+  frozen: boolean;
+  /** Tier at the time the tour was created — used to render the upgrade CTA. */
+  createdOnTier: "free" | "pro" | "unlimited";
+}
+
+const TOURS = new Map<string, MemTour>();
+// Soft cap so a long-running process doesn't grow unbounded.
+const MAX_ENTRIES = 1000;
+
+function evictIfNeeded() {
+  if (TOURS.size <= MAX_ENTRIES) return;
+  const sorted = [...TOURS.entries()].sort(
+    (a, b) => a[1].updatedAt - b[1].updatedAt,
+  );
+  const toRemove = sorted.slice(0, sorted.length - MAX_ENTRIES);
+  for (const [id] of toRemove) TOURS.delete(id);
+}
+
+export function createMemTour(init: Omit<MemTour, "createdAt" | "updatedAt">): MemTour {
+  const now = Date.now();
+  const tour: MemTour = { ...init, createdAt: now, updatedAt: now };
+  TOURS.set(tour.tourId, tour);
+  evictIfNeeded();
+  return tour;
+}
+
+export function getMemTour(tourId: string): MemTour | undefined {
+  return TOURS.get(tourId);
+}
+
+export function updateMemTour(
+  tourId: string,
+  patch: Partial<Omit<MemTour, "tourId" | "createdAt">>,
+): MemTour | undefined {
+  const tour = TOURS.get(tourId);
+  if (!tour) return undefined;
+  Object.assign(tour, patch, { updatedAt: Date.now() });
+  if (patch.generationStatus === "completed" && !tour.completedAt) {
+    tour.completedAt = Date.now();
+  }
+  return tour;
+}
+
+export function deleteMemTour(tourId: string): boolean {
+  return TOURS.delete(tourId);
+}
+
+export function listMemToursForUser(
+  userId: string,
+  opts?: { status?: "all" | "ready" | "processing" | "failed"; search?: string },
+): MemTour[] {
+  const status = opts?.status ?? "all";
+  const search = (opts?.search ?? "").trim().toLowerCase();
+  return [...TOURS.values()]
+    .filter((t) => t.userId === userId)
+    .filter((t) => {
+      if (status === "all") return true;
+      if (status === "ready") return t.generationStatus === "completed";
+      if (status === "processing")
+        return (
+          t.generationStatus === "queued" || t.generationStatus === "processing"
+        );
+      if (status === "failed") return t.generationStatus === "failed";
+      return true;
+    })
+    .filter((t) => {
+      if (!search) return true;
+      return (
+        t.listingAddress.toLowerCase().includes(search) ||
+        t.listingUrl.toLowerCase().includes(search)
+      );
+    })
+    .sort((a, b) => b.createdAt - a.createdAt);
+}
+
+export function memTourCountThisMonthForUser(userId: string): number {
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+  return [...TOURS.values()].filter(
+    (t) => t.userId === userId && t.createdAt >= startOfMonth,
+  ).length;
+}
+
+export function memTotalToursForUser(userId: string): number {
+  return [...TOURS.values()].filter((t) => t.userId === userId).length;
+}
+
+export function memAvgProcessingMinutesForUser(userId: string): number {
+  const completed = [...TOURS.values()].filter(
+    (t) =>
+      t.userId === userId &&
+      t.generationStatus === "completed" &&
+      t.completedAt !== null,
+  );
+  if (completed.length === 0) return 0;
+  const totalMs = completed.reduce(
+    (s, t) => s + ((t.completedAt ?? t.updatedAt) - t.createdAt),
+    0,
+  );
+  return Math.round(totalMs / completed.length / 1000 / 60);
+}
+
+export function memTotalViewsForUser(userId: string): number {
+  return [...TOURS.values()]
+    .filter((t) => t.userId === userId)
+    .reduce((s, t) => s + t.viewCount, 0);
+}
+
+/** Find a tour by its public share token. */
+export function findMemTourByShareToken(token: string): MemTour | undefined {
+  for (const tour of TOURS.values()) {
+    if (tour.shareToken === token) return tour;
+  }
+  return undefined;
+}
+
+/**
+ * Flip `frozen` on any tour whose `expiresAt` has passed. Called both on
+ * read paths (so a stale row still surfaces the right state) and from a
+ * periodic sweep so the dashboard view counters update too.
+ */
+export function refreshTourExpiry(tour: MemTour, now = Date.now()): MemTour {
+  if (!tour.frozen && tour.expiresAt !== null && now >= tour.expiresAt) {
+    tour.frozen = true;
+    tour.updatedAt = now;
+  }
+  return tour;
+}
+
+export function sweepExpiredTours(now = Date.now()): number {
+  let froze = 0;
+  for (const tour of TOURS.values()) {
+    const wasFrozen = tour.frozen;
+    refreshTourExpiry(tour, now);
+    if (!wasFrozen && tour.frozen) froze += 1;
+  }
+  return froze;
+}
+
+/**
+ * Unfreeze every tour belonging to a user and remove their expiry (e.g.
+ * after upgrading to a paid plan).
+ */
+export function unfreezeAllToursForUser(userId: string): number {
+  let count = 0;
+  for (const tour of TOURS.values()) {
+    if (tour.userId !== userId) continue;
+    if (tour.frozen || tour.expiresAt !== null) {
+      tour.frozen = false;
+      tour.expiresAt = null;
+      tour.updatedAt = Date.now();
+      count += 1;
+    }
+  }
+  return count;
+}

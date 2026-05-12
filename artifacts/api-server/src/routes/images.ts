@@ -1,6 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
-import { storeImage, getImage, getPublicBaseUrl } from "../lib/imageStore";
+import { uploadTourImage } from "../lib/imageStorage";
+import { getImage } from "../lib/imageStore";
 
 const router = Router();
 
@@ -16,9 +17,11 @@ const upload = multer({
   },
 });
 
-// POST /images/upload — multipart, returns public URLs WorldLabs can fetch
-router.post("/images/upload", upload.array("images", 20), (req, res) => {
+// POST /images/upload — multipart, pushes to Supabase Storage and returns
+// public URLs that WorldLabs can fetch from anywhere.
+router.post("/images/upload", upload.array("images", 20), async (req, res) => {
   const userId =
+    (req.user as { profileId?: string; id?: string } | undefined)?.profileId ??
     (req.user as { id?: string } | undefined)?.id ??
     (req.headers["x-user-id"] as string | undefined);
   if (!userId) return res.status(401).json({ error: "Unauthorized" });
@@ -28,21 +31,36 @@ router.post("/images/upload", upload.array("images", 20), (req, res) => {
     return res.status(400).json({ error: "No images provided" });
   }
 
-  const baseUrl = getPublicBaseUrl(req as Parameters<typeof getPublicBaseUrl>[0]);
-  const images = files.map((file) => {
-    const id = storeImage(file.buffer, file.mimetype);
-    return {
-      id,
-      url: `${baseUrl}/api/images/${id}`,
-      name: file.originalname,
-      size: file.size,
-    };
-  });
+  try {
+    const images = await Promise.all(
+      files.map(async (file) => {
+        const { key, publicUrl } = await uploadTourImage(
+          file.buffer,
+          file.mimetype,
+          userId,
+          req,
+        );
+        return {
+          id: key,
+          url: publicUrl,
+          name: file.originalname,
+          size: file.size,
+        };
+      }),
+    );
 
-  return res.json({ images });
+    return res.json({ images });
+  } catch (err) {
+    req.log.error({ err }, "Failed to upload images to Supabase Storage");
+    return res.status(500).json({
+      error: "Image upload failed",
+      detail: err instanceof Error ? err.message : "Unknown error",
+    });
+  }
 });
 
-// GET /images/:id — public, no auth required (WorldLabs fetches from here)
+// GET /images/:id — legacy in-memory fallback, kept for backwards compat
+// with old tour records that still hold the old URL shape.
 router.get("/images/:id", (req, res) => {
   const image = getImage(req.params.id);
   if (!image) {

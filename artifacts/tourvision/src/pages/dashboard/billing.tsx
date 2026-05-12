@@ -1,12 +1,34 @@
-import { useGetUserLimits } from "@workspace/api-client-react";
+import {
+  useGetUserLimits,
+  useSubscribeNewsletter,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CheckCircle2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Billing() {
   const { data: limits, isLoading } = useGetUserLimits();
+  const subscribe = useSubscribeNewsletter();
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  const upgrade = async (tier: "pro" | "unlimited") => {
+    try {
+      const result = await subscribe.mutateAsync({
+        // The generated client types this as a "newsletter" body, but our
+        // backend uses it as the subscription endpoint. Cast and pass tier.
+        data: { tier } as unknown as { email: string },
+      });
+      toast({ title: "Plan updated", description: (result as { message?: string }).message ?? `Upgraded to ${tier}` });
+      qc.invalidateQueries();
+    } catch {
+      toast({ title: "Could not upgrade plan", variant: "destructive" });
+    }
+  };
 
   if (isLoading) return <div className="p-6"><Skeleton className="h-[400px] w-full rounded-xl" /></div>;
 
@@ -66,7 +88,11 @@ export default function Billing() {
                 <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-primary" /> Priority processing</li>
                 <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-primary" /> Custom branding</li>
               </ul>
-              <Button className="w-full bg-primary text-primary-foreground" disabled={limits?.tier === 'pro'}>
+              <Button
+                className="w-full bg-primary text-primary-foreground"
+                disabled={limits?.tier === 'pro' || subscribe.isPending}
+                onClick={() => upgrade("pro")}
+              >
                 {limits?.tier === 'pro' ? 'Current Plan' : 'Upgrade to Pro'}
               </Button>
             </CardContent>
@@ -80,8 +106,13 @@ export default function Billing() {
                 <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-primary" /> Highest priority</li>
                 <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-primary" /> API Access</li>
               </ul>
-              <Button variant="outline" className="w-full" disabled={limits?.tier === 'unlimited'}>
-                {limits?.tier === 'unlimited' ? 'Current Plan' : 'Contact Sales'}
+              <Button
+                variant="outline"
+                className="w-full"
+                disabled={limits?.tier === 'unlimited' || subscribe.isPending}
+                onClick={() => upgrade("unlimited")}
+              >
+                {limits?.tier === 'unlimited' ? 'Current Plan' : 'Upgrade to Unlimited'}
               </Button>
             </CardContent>
           </Card>

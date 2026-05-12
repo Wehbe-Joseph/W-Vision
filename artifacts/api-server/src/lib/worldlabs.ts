@@ -2,111 +2,158 @@ import { db } from "@workspace/db";
 import { toursTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { logger } from "./logger";
+import { getMemTour, updateMemTour } from "./tourMemoryStore";
+
+// ─── Config ───────────────────────────────────────────────────────────────────
+//
+// World Labs / Marble API. The current public API lives under
+// `/marble/v1` and uses a `WLT-Api-Key` header for auth. See
+// https://docs.worldlabs.ai/api for the latest reference.
 
 const WORLDLABS_API_BASE = "https://api.worldlabs.ai";
 const WORLDLABS_API_KEY = process.env.WORLD_LABS_API_KEY ?? "";
+const MARBLE_MODEL = process.env.WORLD_LABS_MODEL ?? "marble-1.1";
+
 const POLL_INTERVAL_MS = 15_000;
 const MAX_RETRIES = 3;
-const MAX_POLL_DURATION_MS = 30 * 60 * 1000; // 30 min timeout
+const MAX_POLL_DURATION_MS = 30 * 60 * 1000; // 30 min upper bound
 
-type WorldStatus =
-  | "INITIALIZING"
-  | "PENDING"
-  | "RUNNING"
-  | "SUCCEEDED"
-  | "FAILED";
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-interface WorldLabsWorld {
-  id: string;
-  status: WorldStatus;
-  generation_output?: {
-    cubemap_url?: string;
-    hq_mesh_url?: string;
-    thumbnail_url?: string;
-    minimap_url?: string;
-  };
-  embed_url?: string;
-  preview_url?: string;
-  thumbnail_url?: string;
-  error?: string;
+type ProgressStatus = "PENDING" | "IN_PROGRESS" | "SUCCEEDED" | "FAILED";
+
+interface MarbleOperation {
+  operation_id: string;
+  done: boolean;
+  error: { message?: string; code?: number | string } | null;
+  metadata: {
+    progress?: {
+      status: ProgressStatus;
+      description?: string;
+    };
+    world_id?: string;
+  } | null;
+  response: MarbleWorld | null;
 }
 
-interface CreateWorldResult {
-  worldId: string;
+interface MarbleWorld {
+  id: string;
+  display_name: string | null;
+  world_marble_url: string;
+  assets?: {
+    caption?: string;
+    thumbnail_url?: string;
+    splats?: {
+      spz_urls?: {
+        "100k"?: string;
+        "500k"?: string;
+        full_res?: string;
+      };
+    };
+    mesh?: { collider_mesh_url?: string };
+    imagery?: { pano_url?: string };
+  };
+}
+
+export interface CreateWorldResult {
+  /** Long-running operation id returned by `worlds:generate`. */
+  operationId: string;
 }
 
 interface WorldStatusResult {
   generationStatus: "queued" | "processing" | "completed" | "failed";
-  worldlabsStatus: WorldStatus;
+  worldlabsStatus: ProgressStatus | "UNKNOWN";
+  /** The generated world id (only populated once Marble starts producing one). */
+  worldId: string | null;
+  /** Public marble.worldlabs.ai URL we can embed in an iframe. */
   tourUrl: string | null;
   previewImageUrl: string | null;
   error: string | null;
 }
 
+// ─── HTTP helpers ─────────────────────────────────────────────────────────────
+
 function authHeaders(): Record<string, string> {
   return {
-    Authorization: `Bearer ${WORLDLABS_API_KEY}`,
+    "WLT-Api-Key": WORLDLABS_API_KEY,
     "Content-Type": "application/json",
+    Accept: "application/json",
   };
 }
 
-function mapStatus(wlStatus: WorldStatus): WorldStatusResult["generationStatus"] {
-  switch (wlStatus) {
-    case "INITIALIZING":
+function mapProgress(s: ProgressStatus | undefined): WorldStatusResult["generationStatus"] {
+  switch (s) {
     case "PENDING":
       return "queued";
-    case "RUNNING":
+    case "IN_PROGRESS":
       return "processing";
     case "SUCCEEDED":
       return "completed";
     case "FAILED":
       return "failed";
     default:
-      return "processing";
+      return "queued";
   }
 }
 
+function marbleEmbedUrl(worldId: string | null | undefined): string | null {
+  if (!worldId) return null;
+  return `https://marble.worldlabs.ai/world/${worldId}`;
+}
+
+// ─── Public API ───────────────────────────────────────────────────────────────
+
+/**
+ * Kick off a new world generation from one or more publicly-fetchable image
+ * URLs. Returns the long-running operation id to poll.
+ *
+ * The API supports up to multiple images via the `multi-image` prompt.
+ * Marble expects a `world_prompt` payload — NOT the older `generation_input`
+ * shape that previously lived in this file (which is why prod traffic was
+ * silently 404-ing for months).
+ */
 export async function createWorld(imageUrls: string[]): Promise<CreateWorldResult> {
   if (!WORLDLABS_API_KEY) {
-    throw new Error("WORLDLABSMARBLE_API_KEY is not configured");
+    throw new Error("WORLD_LABS_API_KEY is not configured");
   }
 
-  const primaryImage = imageUrls[0];
-  if (!primaryImage) {
-    throw new Error("At least one image URL is required");
+  // Marble caps multi-image prompts; trim defensively.
+  const usable = imageUrls.filter((u) => !!u && u.startsWith("https://")).slice(0, 8);
+  if (usable.length === 0) {
+    throw new Error("At least one public https:// image URL is required");
   }
 
-  // Build the body — multi-image uses multi_image_prompt format from the Marble frontend
-  const body =
-    imageUrls.length === 1
-      ? {
-          generation_input: {
-            prompt: {
-              type: "image",
-              image_prompt: { uri: primaryImage },
-            },
-          },
-          model: "marble-1.1",
-          visibility: "private",
-          layout: "auto",
-        }
-      : {
-          generation_input: {
-            prompt: {
-              type: "multi_image",
-              multi_image_prompt: imageUrls.slice(0, 8).map((url) => ({
-                uri: url,
-                azimuth: null,
-              })),
-            },
-            reconstruction: true,
-          },
-          model: "marble-1.1",
-          visibility: "private",
-          layout: "auto",
-        };
+  let worldPrompt: Record<string, unknown>;
+  if (usable.length === 1) {
+    worldPrompt = {
+      type: "image",
+      image_prompt: { source: "uri", uri: usable[0] },
+    };
+  } else {
+    // Spread azimuths roughly evenly around the circle so Marble has
+    // some directional hint when reconstructing the room. The user can
+    // refine these later in the Marble UI.
+    const step = 360 / usable.length;
+    worldPrompt = {
+      type: "multi-image",
+      multi_image_prompt: usable.map((uri, i) => ({
+        azimuth: Math.round(i * step),
+        content: { source: "uri", uri },
+      })),
+    };
+  }
 
-  const res = await fetch(`${WORLDLABS_API_BASE}/api/v1/worlds`, {
+  const body = {
+    display_name: "TourVision listing",
+    model: MARBLE_MODEL,
+    world_prompt: worldPrompt,
+    // Marble worlds are private by default. Make them public so the
+    // share link works without the viewer needing a worldlabs.ai account
+    // with explicit access. Anyone with the URL can view, no edit.
+    permission: { public: true },
+  };
+
+  const res = await fetch(`${WORLDLABS_API_BASE}/marble/v1/worlds:generate`, {
     method: "POST",
     headers: authHeaders(),
     body: JSON.stringify(body),
@@ -115,176 +162,270 @@ export async function createWorld(imageUrls: string[]): Promise<CreateWorldResul
   if (!res.ok) {
     const errBody = await res.text().catch(() => "");
     throw new Error(
-      `WorldLabs API error ${res.status}: ${errBody || res.statusText}`
+      `WorldLabs API error ${res.status}: ${errBody || res.statusText}`,
     );
   }
 
-  const data = (await res.json()) as { id?: string; world_id?: string };
-  const worldId = data.id ?? data.world_id;
-  if (!worldId) {
-    throw new Error("WorldLabs API did not return a world ID");
+  const data = (await res.json()) as MarbleOperation;
+  if (!data.operation_id) {
+    throw new Error("WorldLabs API did not return an operation_id");
   }
 
-  return { worldId };
+  return { operationId: data.operation_id };
 }
 
-export async function getWorldStatus(worldId: string): Promise<WorldStatusResult> {
+/** Poll a generation operation. Translates Marble's progress state into the
+ *  internal `generationStatus` enum used everywhere in the tours table. */
+export async function getOperationStatus(
+  operationId: string,
+): Promise<WorldStatusResult> {
   const res = await fetch(
-    `${WORLDLABS_API_BASE}/api/v1/worlds/${encodeURIComponent(worldId)}`,
-    { headers: authHeaders() }
+    `${WORLDLABS_API_BASE}/marble/v1/operations/${encodeURIComponent(operationId)}`,
+    { headers: authHeaders() },
   );
 
   if (!res.ok) {
     const errBody = await res.text().catch(() => "");
     throw new Error(
-      `WorldLabs status check error ${res.status}: ${errBody || res.statusText}`
+      `WorldLabs status check error ${res.status}: ${errBody || res.statusText}`,
     );
   }
 
-  const world = (await res.json()) as WorldLabsWorld;
-  const generationStatus = mapStatus(world.status);
+  const op = (await res.json()) as MarbleOperation;
+  const progress = op.metadata?.progress?.status;
+  const worldId = op.metadata?.world_id ?? op.response?.id ?? null;
+
+  let generationStatus: WorldStatusResult["generationStatus"];
+  if (op.done && op.error) {
+    generationStatus = "failed";
+  } else if (op.done && op.response) {
+    generationStatus = "completed";
+  } else {
+    generationStatus = mapProgress(progress);
+  }
 
   const tourUrl =
-    world.embed_url ??
-    world.generation_output?.cubemap_url ??
-    null;
+    op.response?.world_marble_url ?? marbleEmbedUrl(worldId);
 
   const previewImageUrl =
-    world.thumbnail_url ??
-    world.generation_output?.thumbnail_url ??
-    world.generation_output?.minimap_url ??
+    op.response?.assets?.thumbnail_url ??
+    op.response?.assets?.imagery?.pano_url ??
     null;
+
+  const error =
+    op.error?.message ??
+    (generationStatus === "failed"
+      ? op.metadata?.progress?.description ?? "World generation failed"
+      : null);
 
   return {
     generationStatus,
-    worldlabsStatus: world.status,
+    worldlabsStatus: progress ?? "UNKNOWN",
+    worldId,
     tourUrl,
     previewImageUrl,
-    error: world.error ?? null,
+    error: generationStatus === "failed" ? error : null,
   };
 }
 
-// ─── Background Polling ───────────────────────────────────────────────────────
+// ─── Background polling ───────────────────────────────────────────────────────
 
 const activePollTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-export function schedulePoll(tourId: string, worldId: string, startedAt: Date) {
+export function schedulePoll(
+  tourId: string,
+  operationId: string,
+  startedAt: Date,
+) {
   if (activePollTimers.has(tourId)) return;
-  doSchedule(tourId, worldId, startedAt);
+  doSchedule(tourId, operationId, startedAt);
 }
 
-function doSchedule(tourId: string, worldId: string, startedAt: Date) {
+function doSchedule(tourId: string, operationId: string, startedAt: Date) {
   const handle = setTimeout(() => {
     activePollTimers.delete(tourId);
-    pollTour(tourId, worldId, startedAt).catch((err) => {
+    pollTour(tourId, operationId, startedAt).catch((err) => {
       logger.error({ err, tourId }, "Poll error");
     });
   }, POLL_INTERVAL_MS);
   activePollTimers.set(tourId, handle);
 }
 
+async function safeDbUpdate(
+  tourId: string,
+  values: Parameters<ReturnType<typeof db.update<typeof toursTable>>["set"]>[0],
+  context: string,
+): Promise<void> {
+  try {
+    await db.update(toursTable).set(values).where(eq(toursTable.id, tourId));
+  } catch (err) {
+    logger.warn({ err, tourId, context }, "DB update skipped (DB unavailable)");
+  }
+}
+
 async function pollTour(
   tourId: string,
-  worldId: string,
-  startedAt: Date
+  operationId: string,
+  startedAt: Date,
 ): Promise<void> {
   const elapsed = Date.now() - startedAt.getTime();
+  const memTour = getMemTour(tourId);
+
   if (elapsed > MAX_POLL_DURATION_MS) {
     logger.warn({ tourId }, "Tour generation timed out");
-    await db
-      .update(toursTable)
-      .set({
+    updateMemTour(tourId, {
+      generationStatus: "failed",
+      currentStage: "failed",
+      errorMessage: "Generation timed out after 30 minutes",
+    });
+    await safeDbUpdate(
+      tourId,
+      {
         generationStatus: "failed",
         status: "failed",
         errorMessage: "Generation timed out after 30 minutes",
         processingCompletedAt: new Date(),
-      })
-      .where(eq(toursTable.id, tourId));
+        currentStage: "failed",
+      },
+      "timeout",
+    );
     return;
   }
 
-  const tour = await db.query.toursTable.findFirst({
-    where: eq(toursTable.id, tourId),
-  });
-  if (!tour || tour.generationStatus === "completed" || tour.generationStatus === "failed") {
+  // Check whether we should stop polling — the source of truth is whichever
+  // store currently shows a terminal state.
+  let dbStatus: string | null = null;
+  let dbRetries = 0;
+  let dbThumb: string | null = null;
+  try {
+    const tour = await db.query.toursTable.findFirst({
+      where: eq(toursTable.id, tourId),
+    });
+    if (tour) {
+      dbStatus = tour.generationStatus ?? null;
+      dbRetries = tour.generationRetries ?? 0;
+      dbThumb = tour.thumbnailUrl ?? null;
+    }
+  } catch (err) {
+    logger.warn({ err, tourId }, "DB lookup during poll failed — using memory store");
+  }
+
+  const effectiveStatus = dbStatus ?? memTour?.generationStatus ?? "queued";
+  if (effectiveStatus === "completed" || effectiveStatus === "failed") {
     return;
   }
 
   try {
-    const result = await getWorldStatus(worldId);
+    const result = await getOperationStatus(operationId);
 
     if (result.generationStatus === "completed") {
-      await db
-        .update(toursTable)
-        .set({
+      updateMemTour(tourId, {
+        generationStatus: "completed",
+        currentStage: "ready",
+        worldId: result.worldId,
+        generatedTourUrl: result.tourUrl,
+        previewImageUrl: result.previewImageUrl,
+      });
+      await safeDbUpdate(
+        tourId,
+        {
           generationStatus: "completed",
           status: "ready",
-          worldlabsJobId: worldId,
+          worldlabsJobId: result.worldId ?? operationId,
           generatedTourUrl: result.tourUrl,
           previewImageUrl: result.previewImageUrl,
-          thumbnailUrl: result.previewImageUrl ?? tour.thumbnailUrl,
+          thumbnailUrl: result.previewImageUrl ?? dbThumb ?? undefined,
           tourEmbedUrl: result.tourUrl,
           processingCompletedAt: new Date(),
           currentStage: "ready",
-        })
-        .where(eq(toursTable.id, tourId));
-      logger.info({ tourId, worldId }, "Tour generation completed");
+        },
+        "completion",
+      );
+      logger.info(
+        { tourId, operationId, worldId: result.worldId, tourUrl: result.tourUrl },
+        "Tour generation completed",
+      );
       return;
     }
 
     if (result.generationStatus === "failed") {
-      await db
-        .update(toursTable)
-        .set({
+      updateMemTour(tourId, {
+        generationStatus: "failed",
+        currentStage: "failed",
+        errorMessage: result.error ?? "3D world generation failed",
+      });
+      await safeDbUpdate(
+        tourId,
+        {
           generationStatus: "failed",
           status: "failed",
           errorMessage: result.error ?? "3D world generation failed",
           processingCompletedAt: new Date(),
           currentStage: "failed",
-        })
-        .where(eq(toursTable.id, tourId));
-      logger.warn({ tourId, worldId, error: result.error }, "Tour generation failed");
+        },
+        "failure",
+      );
+      logger.warn(
+        { tourId, operationId, error: result.error },
+        "Tour generation failed",
+      );
       return;
     }
 
+    // Still queued or processing — push the latest stage label through.
     const stageMap: Record<string, string> = {
       queued: "Queued for generation…",
       processing: "Building your 3D world…",
     };
+    const stage = stageMap[result.generationStatus] ?? "Processing…";
 
-    await db
-      .update(toursTable)
-      .set({
+    updateMemTour(tourId, {
+      generationStatus: result.generationStatus,
+      currentStage: stage,
+      worldId: result.worldId ?? memTour?.worldId ?? null,
+    });
+    await safeDbUpdate(
+      tourId,
+      {
         generationStatus: result.generationStatus,
-        currentStage: stageMap[result.generationStatus] ?? "Processing…",
-      })
-      .where(eq(toursTable.id, tourId));
+        currentStage: stage,
+      },
+      "progress",
+    );
 
-    doSchedule(tourId, worldId, startedAt);
+    doSchedule(tourId, operationId, startedAt);
   } catch (err) {
-    logger.error({ err, tourId, worldId }, "WorldLabs poll request failed");
+    logger.error({ err, tourId, operationId }, "WorldLabs poll request failed");
 
-    const retries = (tour.generationRetries ?? 0) + 1;
+    const retries = Math.max(dbRetries, memTour ? 0 : 0) + 1;
     if (retries >= MAX_RETRIES) {
-      await db
-        .update(toursTable)
-        .set({
+      updateMemTour(tourId, {
+        generationStatus: "failed",
+        currentStage: "failed",
+        errorMessage: "Failed to check generation status after multiple retries",
+      });
+      await safeDbUpdate(
+        tourId,
+        {
           generationStatus: "failed",
           status: "failed",
-          errorMessage: "Failed to check generation status after multiple retries",
+          errorMessage:
+            "Failed to check generation status after multiple retries",
           generationRetries: retries,
           processingCompletedAt: new Date(),
-        })
-        .where(eq(toursTable.id, tourId));
+        },
+        "retries-exhausted",
+      );
       return;
     }
 
-    await db
-      .update(toursTable)
-      .set({ generationRetries: retries })
-      .where(eq(toursTable.id, tourId));
+    await safeDbUpdate(
+      tourId,
+      { generationRetries: retries },
+      "retry-bump",
+    );
 
-    doSchedule(tourId, worldId, startedAt);
+    doSchedule(tourId, operationId, startedAt);
   }
 }
 

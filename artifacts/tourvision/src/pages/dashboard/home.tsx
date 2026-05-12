@@ -1,4 +1,4 @@
-import { useGetTourStats, useGetRecentTours } from "@workspace/api-client-react";
+import { useGetTourStats, useGetRecentTours, useGetUserLimits } from "@workspace/api-client-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,7 @@ export default function DashboardHome() {
   const [, setLocation] = useLocation();
   const { data: stats, isLoading: statsLoading } = useGetTourStats();
   const { data: recentToursData, isLoading: toursLoading } = useGetRecentTours();
+  const { data: limits } = useGetUserLimits();
   const [url, setUrl] = useState("");
 
   const handleQuickGenerate = (e: React.FormEvent) => {
@@ -44,7 +45,13 @@ export default function DashboardHome() {
           <span className="text-xs font-mono font-bold uppercase tracking-widest text-muted-foreground">Dashboard</span>
         </div>
         <h1 className="text-4xl font-serif">GOOD MORNING, {(user?.firstName || "AGENT").toUpperCase()}</h1>
-        <p className="text-muted-foreground mt-1 text-sm">You have 11 tours remaining this month.</p>
+        <p className="text-muted-foreground mt-1 text-sm">
+          {limits
+            ? `You have ${limits.toursRemaining} ${
+                limits.toursRemaining === 1 ? "tour" : "tours"
+              } remaining this month on the ${limits.tier} plan.`
+            : "Loading your usage…"}
+        </p>
       </div>
 
       {/* Stat cards */}

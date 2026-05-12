@@ -12,8 +12,6 @@ import {
   savePendingTour, filesToPendingPhotos, PendingPhoto
 } from "@/hooks/use-pending-tour";
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-
 export default function Landing() {
   const { isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
@@ -56,7 +54,7 @@ export default function Landing() {
     if (isAuthenticated) {
       setLocation("/dashboard/new-tour");
     } else {
-      window.location.href = `${BASE}/api/login?returnTo=${encodeURIComponent(BASE + "/dashboard")}`;
+      setLocation("/signup");
     }
   };
 
@@ -92,12 +90,15 @@ export default function Landing() {
               </Link>
             ) : (
               <>
-                <a href={`${BASE}/api/login`} className="px-4 py-2 text-sm font-bold uppercase tracking-wide border-2 border-foreground hover:bg-accent transition-colors">
+                <Link
+                  href="/login"
+                  className="px-4 py-2 text-sm font-bold uppercase tracking-wide border-2 border-foreground hover:bg-accent transition-colors"
+                >
                   Login
-                </a>
-                <a href={`${BASE}/api/login`}>
+                </Link>
+                <Link href="/signup">
                   <Button>Get Started</Button>
-                </a>
+                </Link>
               </>
             )}
           </div>

@@ -1,5 +1,6 @@
 import { Switch, Route, Router as WouterRouter, Redirect, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { getOnboardingStatus } from "@workspace/api-client-react";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
@@ -32,8 +33,7 @@ function PostLoginRouter() {
 
     handled.current = true;
 
-    fetch("/api/user/onboarding-status", { credentials: "include" })
-      .then((r) => r.json())
+    getOnboardingStatus()
       .then((data: { completed?: boolean }) => {
         if (!data.completed) {
           setLocation("/onboarding");
@@ -53,9 +53,20 @@ function PublicRoute({ component: Component }: { component: React.ComponentType 
   return <Component />;
 }
 
+function AuthLoading() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="flex items-center gap-3 text-xs font-mono uppercase tracking-widest text-muted-foreground">
+        <span className="w-2 h-2 bg-primary animate-pulse" />
+        Loading…
+      </div>
+    </div>
+  );
+}
+
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { isAuthenticated, isLoading } = useAuth();
-  if (isLoading) return null;
+  if (isLoading) return <AuthLoading />;
   if (!isAuthenticated) return <Redirect to="/login" />;
   return (
     <DashboardLayout>

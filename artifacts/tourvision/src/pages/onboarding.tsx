@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
+import { completeOnboarding } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -42,7 +43,9 @@ function SelectCard<T extends string>({
   onSelect: (id: T) => void;
 }) {
   return (
-    <button
+    <motion.button
+      whileHover={{ rotateX: 4, rotateY: -4, y: -2 }}
+      transition={{ type: "spring", stiffness: 220, damping: 15 }}
       onClick={() => onSelect(item.id)}
       className={`flex items-center gap-4 p-4 rounded-xl border-2 text-left transition-all font-medium text-sm w-full ${
         selected
@@ -54,7 +57,7 @@ function SelectCard<T extends string>({
         <item.icon className="w-4 h-4" />
       </div>
       {item.label}
-    </button>
+    </motion.button>
   );
 }
 
@@ -76,13 +79,7 @@ export default function Onboarding() {
   const finish = async () => {
     setSaving(true);
     try {
-      const res = await fetch("/api/user/onboarding", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ useCase, referralSource }),
-      });
-      if (!res.ok) throw new Error("Failed");
+      await completeOnboarding({ useCase, referralSource });
     } catch {
       toast({ title: "Couldn't save answers", description: "Continuing anyway…", variant: "destructive" });
     } finally {
@@ -127,7 +124,13 @@ export default function Onboarding() {
       </div>
 
       <div className="w-full max-w-xl mt-8">
-        <div className="bg-card border border-border rounded-2xl shadow-xl overflow-hidden relative" style={{ minHeight: 420 }}>
+        <motion.div
+          initial={{ rotateX: -6, opacity: 0, y: 16 }}
+          animate={{ rotateX: 0, opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="bg-card border border-border rounded-2xl shadow-xl overflow-hidden relative [perspective:1400px]"
+          style={{ minHeight: 420 }}
+        >
           <AnimatePresence mode="wait" custom={dir}>
             {/* Step 1: Role */}
             {step === 1 && (
@@ -203,7 +206,7 @@ export default function Onboarding() {
               </motion.div>
             )}
           </AnimatePresence>
-        </div>
+        </motion.div>
 
         <p className="text-center text-xs text-muted-foreground mt-4">
           Takes 20 seconds · You can change this later in settings

@@ -1,14 +1,32 @@
 import { useState } from "react";
-import { useParams } from "wouter";
+import { useParams, useLocation } from "wouter";
 import { useGetPublicTour } from "@workspace/api-client-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, Share2, CheckCircle2, AlertTriangle, ArrowUpRight, Cuboid } from "lucide-react";
+import {
+  Menu,
+  X,
+  Share2,
+  CheckCircle2,
+  AlertTriangle,
+  ArrowUpRight,
+  Cuboid,
+  Lock,
+  Sparkles,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
+interface PublicTourExtras {
+  generatedTourUrl?: string | null;
+  frozen?: boolean;
+  expiresAt?: string | null;
+  createdOnTier?: "free" | "pro" | "unlimited";
+}
+
 export default function TourViewer() {
   const params = useParams();
+  const [, setLocation] = useLocation();
   const shareToken = params.shareToken || "";
   const { data: tour, isLoading } = useGetPublicTour(shareToken, { query: { enabled: !!shareToken, queryKey: ["public-tour", shareToken] } });
 
@@ -28,10 +46,14 @@ export default function TourViewer() {
     </div>
   );
 
+  const extras = tour as unknown as PublicTourExtras;
+  const frozen = !!extras.frozen;
+  const worldUrl = extras.generatedTourUrl ?? null;
   const currentRoom = activeRoomId ? tour.rooms.find(r => r.id === activeRoomId) : tour.rooms[0];
-  const marbleUrl = currentRoom?.marbleEmbedUrl;
-  const thumbnailUrl = currentRoom?.thumbnailUrl;
-  const useIframe = marbleUrl && !iframeError;
+  // Prefer the whole-world Marble URL; fall back to per-room embed for legacy tours.
+  const marbleUrl = !frozen && (worldUrl || currentRoom?.marbleEmbedUrl);
+  const thumbnailUrl = currentRoom?.thumbnailUrl ?? tour.thumbnailUrl ?? null;
+  const useIframe = !!marbleUrl && !iframeError;
 
   return (
     <div className="fixed inset-0 bg-black overflow-hidden font-sans text-foreground">
@@ -40,10 +62,11 @@ export default function TourViewer() {
         <AnimatePresence mode="wait">
           {useIframe ? (
             <iframe
-              key={`iframe-${currentRoom?.id}`}
+              key={`iframe-${worldUrl ?? currentRoom?.id}`}
               src={marbleUrl}
               className="w-full h-full border-none"
-              allow="xr-spatial-tracking"
+              allow="xr-spatial-tracking; gyroscope; accelerometer"
+              allowFullScreen
               onError={() => setIframeError(true)}
             />
           ) : thumbnailUrl ? (
@@ -86,8 +109,61 @@ export default function TourViewer() {
           )}
         </AnimatePresence>
 
+        {/* Frozen-tour overlay (free tier expired) */}
+        {frozen && (
+          <div className="absolute inset-0 z-30 bg-black/85 backdrop-blur-md flex items-center justify-center px-6">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="max-w-md w-full bg-card border-2 border-foreground shadow-[8px_8px_0px_0px_#1A1714] overflow-hidden"
+            >
+              <div className="flex items-center gap-2 px-4 py-2.5 border-b-2 border-foreground bg-foreground">
+                <span className="w-2 h-2 bg-primary" />
+                <span className="text-xs font-mono font-bold uppercase tracking-widest text-background">
+                  Tour Frozen
+                </span>
+              </div>
+              <div className="p-6 text-center">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-primary/10 border-2 border-primary flex items-center justify-center">
+                  <Lock className="w-7 h-7 text-primary" />
+                </div>
+                <h2 className="text-2xl font-serif mb-2">THIS TOUR IS FROZEN</h2>
+                <p className="text-sm text-muted-foreground mb-1">
+                  Free-tier tours stay live for 24&nbsp;hours. After that the
+                  3D world is locked until the owner upgrades.
+                </p>
+                {extras.expiresAt && (
+                  <p className="text-xs text-muted-foreground/70 font-mono mb-5">
+                    Expired{" "}
+                    {new Date(extras.expiresAt).toLocaleString(undefined, {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    })}
+                  </p>
+                )}
+                <div className="space-y-2">
+                  <Button
+                    className="w-full bg-primary text-primary-foreground font-bold"
+                    onClick={() => setLocation("/dashboard/billing")}
+                  >
+                    <Sparkles className="w-4 h-4 mr-2" />
+                    Upgrade to Unfreeze
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => setLocation("/dashboard")}
+                  >
+                    Back to Dashboard
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
         {/* Confidence overlay */}
-        {showConfidence && (
+        {showConfidence && !frozen && (
           <div className="absolute inset-0 pointer-events-none">
             <div className="absolute top-1/4 left-1/4 w-32 h-32 bg-primary/20 border border-primary/50 rounded-full blur-sm flex items-center justify-center font-mono text-primary text-xs">Real Photo</div>
             <div className="absolute bottom-1/4 right-1/4 w-48 h-48 bg-blue-500/20 border border-blue-500/50 rounded-full blur-sm flex items-center justify-center font-mono text-blue-400 text-xs">AI High Conf</div>
@@ -117,7 +193,13 @@ export default function TourViewer() {
           </div>
 
           <div className="flex gap-2">
-            <Button variant="outline" className="bg-black/70 backdrop-blur-md border-white/10 text-white font-medium hover:border-primary/50 hover:text-primary">
+            <Button
+              variant="outline"
+              className="bg-black/70 backdrop-blur-md border-white/10 text-white font-medium hover:border-primary/50 hover:text-primary"
+              onClick={() => {
+                navigator.clipboard.writeText(window.location.href);
+              }}
+            >
               <Share2 className="w-4 h-4 mr-2" /> Share
             </Button>
             <Button className="bg-primary text-black font-bold glow-primary hover:bg-primary/90">

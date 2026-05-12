@@ -14,6 +14,20 @@ import {
   SetTourFloorCountBody,
   UpdateTourRoomFloorsBody,
 } from "@workspace/api-zod";
+import {
+  listMemToursForUser,
+  getMemTour,
+  deleteMemTour,
+  memTourCountThisMonthForUser,
+  memTotalToursForUser,
+  memAvgProcessingMinutesForUser,
+  memTotalViewsForUser,
+  findMemTourByShareToken,
+  refreshTourExpiry,
+  unfreezeAllToursForUser,
+  type MemTour,
+} from "../lib/tourMemoryStore";
+import { getMemUser, isPaidTier } from "../lib/userMemoryStore";
 
 const router = Router();
 
@@ -22,6 +36,59 @@ const TOUR_LIMITS: Record<string, number> = {
   pro: 15,
   unlimited: 30,
 };
+
+function mapMemTour(t: MemTour) {
+  refreshTourExpiry(t);
+  const status =
+    t.frozen
+      ? "frozen"
+      : t.generationStatus === "completed"
+        ? "ready"
+        : t.generationStatus === "failed"
+          ? "failed"
+          : "processing";
+  return {
+    id: t.tourId,
+    userId: t.userId,
+    listingUrl: t.listingUrl,
+    listingTitle: null,
+    listingAddress: t.listingAddress,
+    listingPlatform: t.listingPlatform,
+    listingPrice: null,
+    listingBedrooms: null,
+    listingBathrooms: null,
+    listingSqft: null,
+    status,
+    currentStage: t.currentStage,
+    totalPhotosExtracted: t.imageCount,
+    photosUsed: t.imageCount,
+    roomsDetected: null,
+    floorCount: 1,
+    confidenceScore: null,
+    realAngles: null,
+    aiHighAngles: null,
+    aiLowAngles: null,
+    marbleWorldIds: t.worldId ? [t.worldId] : null,
+    tourEmbedUrl: t.frozen ? null : t.generatedTourUrl,
+    shareToken: t.shareToken,
+    isWatermarked: true,
+    thumbnailUrl: t.previewImageUrl,
+    viewCount: t.viewCount,
+    errorMessage: t.errorMessage,
+    generationStatus: t.generationStatus,
+    worldlabsJobId: t.worldId ?? t.operationId,
+    generatedTourUrl: t.frozen ? null : t.generatedTourUrl,
+    previewImageUrl: t.previewImageUrl,
+    processingStartedAt: new Date(t.createdAt).toISOString(),
+    processingCompletedAt: t.completedAt
+      ? new Date(t.completedAt).toISOString()
+      : null,
+    createdAt: new Date(t.createdAt).toISOString(),
+    frozen: t.frozen,
+    expiresAt: t.expiresAt ? new Date(t.expiresAt).toISOString() : null,
+    createdOnTier: t.createdOnTier,
+  };
+}
 
 function generateShareToken() {
   return randomBytes(12).toString("hex");
@@ -205,17 +272,18 @@ async function simulateTourProcessing(tourId: string) {
 
 // GET /tours — list tours
 router.get("/tours", async (req, res) => {
+  const userId =
+    (req.user as { profileId?: string } | undefined)?.profileId ??
+    (req.headers["x-user-id"] as string | undefined);
+  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+  const parsed = ListToursQueryParams.safeParse(req.query);
+  const params = parsed.success ? parsed.data : {};
+  const page = params.page ?? 1;
+  const limit = params.limit ?? 12;
+  const offset = (page - 1) * limit;
+
   try {
-    const userId = (req.user as { profileId?: string } | undefined)?.profileId ?? (req.headers["x-user-id"] as string | undefined);
-    if (!userId) return res.status(401).json({ error: "Unauthorized" });
-
-    const parsed = ListToursQueryParams.safeParse(req.query);
-    const params = parsed.success ? parsed.data : {};
-
-    const page = params.page ?? 1;
-    const limit = params.limit ?? 12;
-    const offset = (page - 1) * limit;
-
     let query = db
       .select()
       .from(toursTable)
@@ -227,8 +295,8 @@ router.get("/tours", async (req, res) => {
             : undefined,
           params.search
             ? ilike(toursTable.listingAddress, `%${params.search}%`)
-            : undefined
-        )
+            : undefined,
+        ),
       )
       .limit(limit)
       .offset(offset);
@@ -252,17 +320,30 @@ router.get("/tours", async (req, res) => {
       totalPages: Math.ceil(total / limit),
     });
   } catch (err) {
-    req.log.error(err);
-    return res.status(500).json({ error: "Internal server error" });
+    req.log.warn({ err }, "DB list tours failed — using in-memory store");
+    const all = listMemToursForUser(userId, {
+      status: params.status as "all" | "ready" | "processing" | "failed" | undefined,
+      search: params.search,
+    });
+    const total = all.length;
+    const page1 = all.slice(offset, offset + limit).map(mapMemTour);
+    return res.json({
+      tours: page1,
+      total,
+      page,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+    });
   }
 });
 
 // GET /tours/recent
 router.get("/tours/recent", async (req, res) => {
-  try {
-    const userId = (req.user as { profileId?: string } | undefined)?.profileId ?? (req.headers["x-user-id"] as string | undefined);
-    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+  const userId =
+    (req.user as { profileId?: string } | undefined)?.profileId ??
+    (req.headers["x-user-id"] as string | undefined);
+  if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
+  try {
     const tours = await db
       .select()
       .from(toursTable)
@@ -272,78 +353,121 @@ router.get("/tours/recent", async (req, res) => {
 
     return res.json({ tours: tours.map(mapTour), total: tours.length });
   } catch (err) {
-    req.log.error(err);
-    return res.status(500).json({ error: "Internal server error" });
+    req.log.warn({ err }, "DB recent tours failed — using in-memory store");
+    const recent = listMemToursForUser(userId).slice(0, 5).map(mapMemTour);
+    return res.json({ tours: recent, total: recent.length });
   }
 });
 
 // GET /tours/stats
 router.get("/tours/stats", async (req, res) => {
-  try {
-    const userId = (req.user as { profileId?: string } | undefined)?.profileId ?? (req.headers["x-user-id"] as string | undefined);
-    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+  const userId =
+    (req.user as { profileId?: string } | undefined)?.profileId ??
+    (req.headers["x-user-id"] as string | undefined);
+  if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
+  let tier = "free";
+  let toursThisMonth: number | null = null;
+  let totalToursAllTime: number | null = null;
+  let totalViewsThisMonth: number | null = null;
+  let avgProcessingMinutes = 0;
+
+  try {
     const profile = await db.query.profilesTable.findFirst({
       where: eq(profilesTable.id, userId),
     });
-
-    const tier = profile?.subscriptionTier || "free";
-    const limit = TOUR_LIMITS[tier] ?? 1;
+    tier = profile?.subscriptionTier || "free";
+    toursThisMonth = profile?.toursThisMonth ?? null;
+    totalToursAllTime = profile?.totalTours ?? null;
 
     const allTours = await db
       .select()
       .from(toursTable)
       .where(eq(toursTable.userId, userId));
-
-    const totalViews = allTours.reduce((s, t) => s + t.viewCount, 0);
-
-    return res.json({
-      toursThisMonth: profile?.toursThisMonth ?? 0,
-      toursLimit: limit,
-      avgProcessingMinutes: 24,
-      totalViewsThisMonth: totalViews,
-      totalToursAllTime: profile?.totalTours ?? 0,
-    });
+    totalViewsThisMonth = allTours.reduce((s, t) => s + t.viewCount, 0);
   } catch (err) {
-    req.log.error(err);
-    return res.status(500).json({ error: "Internal server error" });
+    req.log.warn({ err }, "DB stats lookup failed — using in-memory store");
   }
+
+  // Always merge in the in-memory store — DB profile counters lag behind
+  // realtime generation, and when the DB is offline they're missing entirely.
+  const memCountMonth = memTourCountThisMonthForUser(userId);
+  const memTotal = memTotalToursForUser(userId);
+  const memViews = memTotalViewsForUser(userId);
+  const memAvg = memAvgProcessingMinutesForUser(userId);
+
+  const finalToursThisMonth = Math.max(toursThisMonth ?? 0, memCountMonth);
+  const finalTotal = Math.max(totalToursAllTime ?? 0, memTotal);
+  const finalViews = Math.max(totalViewsThisMonth ?? 0, memViews);
+  avgProcessingMinutes = memAvg;
+
+  const limit = TOUR_LIMITS[tier] ?? 1;
+
+  return res.json({
+    toursThisMonth: finalToursThisMonth,
+    toursLimit: limit,
+    avgProcessingMinutes,
+    totalViewsThisMonth: finalViews,
+    totalToursAllTime: finalTotal,
+  });
 });
 
 // GET /tours/:tourId
 router.get("/tours/:tourId", async (req, res) => {
+  const userId =
+    (req.user as { profileId?: string } | undefined)?.profileId ??
+    (req.headers["x-user-id"] as string | undefined);
+  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
   try {
-    const userId = (req.user as { profileId?: string } | undefined)?.profileId ?? (req.headers["x-user-id"] as string | undefined);
-    if (!userId) return res.status(401).json({ error: "Unauthorized" });
-
     const tour = await db.query.toursTable.findFirst({
-      where: and(eq(toursTable.id, req.params.tourId), eq(toursTable.userId, userId)),
+      where: and(
+        eq(toursTable.id, req.params.tourId),
+        eq(toursTable.userId, userId),
+      ),
     });
-
-    if (!tour) return res.status(404).json({ error: "Tour not found" });
-
-    return res.json(mapTour(tour));
+    if (tour) return res.json(mapTour(tour));
   } catch (err) {
-    req.log.error(err);
-    return res.status(500).json({ error: "Internal server error" });
+    req.log.warn({ err }, "DB tour lookup failed — using in-memory store");
   }
+
+  const mem = getMemTour(req.params.tourId);
+  if (!mem || mem.userId !== userId) {
+    return res.status(404).json({ error: "Tour not found" });
+  }
+  return res.json(mapMemTour(mem));
 });
 
 // DELETE /tours/:tourId
 router.delete("/tours/:tourId", async (req, res) => {
-  try {
-    const userId = (req.user as { profileId?: string } | undefined)?.profileId ?? (req.headers["x-user-id"] as string | undefined);
-    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+  const userId =
+    (req.user as { profileId?: string } | undefined)?.profileId ??
+    (req.headers["x-user-id"] as string | undefined);
+  if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
+  let dbDeleted = false;
+  try {
     await db
       .delete(toursTable)
-      .where(and(eq(toursTable.id, req.params.tourId), eq(toursTable.userId, userId)));
-
-    return res.json({ success: true, message: "Tour deleted" });
+      .where(
+        and(
+          eq(toursTable.id, req.params.tourId),
+          eq(toursTable.userId, userId),
+        ),
+      );
+    dbDeleted = true;
   } catch (err) {
-    req.log.error(err);
-    return res.status(500).json({ error: "Internal server error" });
+    req.log.warn({ err }, "DB delete failed — clearing in-memory only");
   }
+
+  // Always evict from memory too — otherwise the tour reappears in /tours.
+  const mem = getMemTour(req.params.tourId);
+  if (mem && mem.userId === userId) deleteMemTour(req.params.tourId);
+
+  return res.json({
+    success: true,
+    message: dbDeleted ? "Tour deleted" : "Tour deleted (memory only)",
+  });
 });
 
 // GET /tours/:tourId/status
@@ -461,37 +585,105 @@ router.put("/tours/:tourId/floors", async (req, res) => {
 // GET /tours/public/:shareToken — public, no auth
 router.get("/tours/public/:shareToken", async (req, res) => {
   try {
-    const tour = await db.query.toursTable.findFirst({
-      where: eq(toursTable.shareToken, req.params.shareToken),
-    });
+    let tour: typeof toursTable.$inferSelect | undefined;
+    try {
+      tour = await db.query.toursTable.findFirst({
+        where: eq(toursTable.shareToken, req.params.shareToken),
+      });
+    } catch (err) {
+      req.log.warn(
+        { err, shareToken: req.params.shareToken },
+        "DB public tour lookup failed — falling back to memory",
+      );
+    }
 
-    if (!tour) return res.status(404).json({ error: "Tour not found" });
+    if (!tour) {
+      // Try memory fallback before 404
+      const mem = findMemTourByShareToken(req.params.shareToken);
+      if (mem) {
+        refreshTourExpiry(mem);
+        if (!mem.frozen) mem.viewCount += 1;
+        return res.json({
+          id: mem.tourId,
+          shareToken: mem.shareToken,
+          listingAddress: mem.listingAddress,
+          listingPlatform: mem.listingPlatform,
+          listingPrice: null,
+          listingBedrooms: null,
+          listingBathrooms: null,
+          listingSqft: null,
+          marbleWorldIds: mem.frozen || !mem.worldId ? null : [mem.worldId],
+          rooms: [],
+          confidenceScore: null,
+          realAngles: null,
+          aiHighAngles: null,
+          aiLowAngles: null,
+          isWatermarked: true,
+          agentName: null,
+          agentLogo: null,
+          thumbnailUrl: mem.previewImageUrl,
+          generatedTourUrl: mem.frozen ? null : mem.generatedTourUrl,
+          frozen: mem.frozen,
+          expiresAt: mem.expiresAt ? new Date(mem.expiresAt).toISOString() : null,
+          createdOnTier: mem.createdOnTier,
+        });
+      }
+      return res.status(404).json({ error: "Tour not found" });
+    }
 
-    // Increment view count
-    await db
-      .update(toursTable)
-      .set({ viewCount: sql`view_count + 1` })
-      .where(eq(toursTable.id, tour.id));
+    try {
+      await db
+        .update(toursTable)
+        .set({ viewCount: sql`view_count + 1` })
+        .where(eq(toursTable.id, tour.id));
+      const ip = req.ip || "unknown";
+      await db.insert(tourViewsTable).values({
+        tourId: tour.id,
+        viewerIp: ip,
+        country: "Unknown",
+        deviceType: req.headers["user-agent"]?.includes("Mobile")
+          ? "mobile"
+          : "desktop",
+        browser: "browser",
+      });
+    } catch (err) {
+      req.log.warn({ err }, "Failed to increment view counters");
+    }
 
-    // Log view
-    const ip = req.ip || "unknown";
-    await db.insert(tourViewsTable).values({
-      tourId: tour.id,
-      viewerIp: ip,
-      country: "Unknown",
-      deviceType: req.headers["user-agent"]?.includes("Mobile") ? "mobile" : "desktop",
-      browser: "browser",
-    });
+    let rooms: (typeof tourPhotosTable.$inferSelect)[] = [];
+    try {
+      rooms = await db
+        .select()
+        .from(tourPhotosTable)
+        .where(
+          and(
+            eq(tourPhotosTable.tourId, tour.id),
+            eq(tourPhotosTable.isBestForRoom, true),
+          ),
+        )
+        .orderBy(asc(tourPhotosTable.floorNumber));
+    } catch (err) {
+      req.log.warn({ err }, "Failed to load rooms — returning empty list");
+    }
 
-    const rooms = await db
-      .select()
-      .from(tourPhotosTable)
-      .where(and(eq(tourPhotosTable.tourId, tour.id), eq(tourPhotosTable.isBestForRoom, true)))
-      .orderBy(asc(tourPhotosTable.floorNumber));
+    let agent: typeof profilesTable.$inferSelect | undefined;
+    try {
+      agent = await db.query.profilesTable.findFirst({
+        where: eq(profilesTable.id, tour.userId),
+      });
+    } catch {
+      // agent metadata is optional in the response
+    }
 
-    const agent = await db.query.profilesTable.findFirst({
-      where: eq(profilesTable.id, tour.userId),
-    });
+    // Consult the memory mirror for tier / expiry — these aren't (yet)
+    // persisted to the DB schema.
+    const mem = findMemTourByShareToken(req.params.shareToken);
+    if (mem) refreshTourExpiry(mem);
+    const frozen = mem?.frozen ?? false;
+    const expiresAt = mem?.expiresAt
+      ? new Date(mem.expiresAt).toISOString()
+      : null;
+    const createdOnTier = mem?.createdOnTier ?? "free";
 
     return res.json({
       id: tour.id,
@@ -502,7 +694,7 @@ router.get("/tours/public/:shareToken", async (req, res) => {
       listingBedrooms: tour.listingBedrooms,
       listingBathrooms: tour.listingBathrooms,
       listingSqft: tour.listingSqft,
-      marbleWorldIds: tour.marbleWorldIds,
+      marbleWorldIds: frozen ? null : tour.marbleWorldIds,
       rooms: rooms.map(mapRoom),
       confidenceScore: tour.confidenceScore,
       realAngles: tour.realAngles,
@@ -512,6 +704,10 @@ router.get("/tours/public/:shareToken", async (req, res) => {
       agentName: agent?.fullName ?? null,
       agentLogo: agent?.avatarUrl ?? null,
       thumbnailUrl: tour.thumbnailUrl,
+      generatedTourUrl: frozen ? null : tour.generatedTourUrl,
+      frozen,
+      expiresAt,
+      createdOnTier,
     });
   } catch (err) {
     req.log.error(err);

@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { useGenerateTour, useGetGenerationStatus } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 import {
   Link2, Loader2, CheckCircle2, Copy, ExternalLink, AlertCircle,
   ImagePlus, Upload, X, Sparkles, ChevronRight, RefreshCw,
@@ -59,6 +60,7 @@ export default function NewTour() {
   const [, setLocation] = useLocation();
   const fileRef = useRef<HTMLInputElement>(null);
   const generateMutation = useGenerateTour();
+  const { getAccessToken } = useAuth();
 
   // Load pending tour from sessionStorage on mount
   useEffect(() => {
@@ -157,17 +159,53 @@ export default function NewTour() {
           const blob = dataUrlToBlob(photo.dataUrl);
           formData.append("images", blob, photo.name);
         }
+
+        // /api/images/upload is auth-gated; without the Supabase bearer
+        // token the backend returns 401, which manifested to the user as
+        // a generic "check your connection" toast.
+        const token = await getAccessToken();
+        if (!token) {
+          setIsUploading(false);
+          toast({
+            title: "Please sign in",
+            description: "Your session expired — sign in again to upload photos.",
+            variant: "destructive",
+          });
+          setLocation("/login");
+          return;
+        }
+
         const uploadRes = await fetch("/api/images/upload", {
           method: "POST",
           credentials: "include",
+          headers: { Authorization: `Bearer ${token}` },
           body: formData,
         });
         setIsUploading(false);
+
         if (uploadRes.ok) {
           const uploadData = (await uploadRes.json()) as { images: { url: string }[] };
           uploadedUrls = uploadData.images.map((i) => i.url);
         } else {
-          toast({ title: "Upload failed", description: "Could not upload photos — check your connection.", variant: "destructive" });
+          let detail = `HTTP ${uploadRes.status}`;
+          try {
+            const errBody = await uploadRes.json();
+            if (errBody?.detail) detail = errBody.detail;
+            else if (errBody?.error) detail = errBody.error;
+          } catch {
+            // Body wasn't JSON — fall back to text snippet
+            try {
+              const t = await uploadRes.text();
+              if (t) detail = t.slice(0, 200);
+            } catch {
+              // ignore
+            }
+          }
+          toast({
+            title: "Upload failed",
+            description: detail,
+            variant: "destructive",
+          });
           return;
         }
       }
@@ -599,21 +637,12 @@ export default function NewTour() {
                   Copy Share Link <Copy className="w-4 h-4" />
                 </Button>
 
-                {result.generatedTourUrl ? (
-                  <Button
-                    className="w-full justify-between bg-primary text-primary-foreground font-bold"
-                    onClick={() => window.open(result.generatedTourUrl!, "_blank")}
-                  >
-                    Open 3D Tour <ExternalLink className="w-4 h-4" />
-                  </Button>
-                ) : (
-                  <Button
-                    className="w-full justify-between bg-primary text-primary-foreground font-bold"
-                    onClick={() => window.open(`/tour/${result.shareToken}`, "_blank")}
-                  >
-                    Open Tour <ExternalLink className="w-4 h-4" />
-                  </Button>
-                )}
+                <Button
+                  className="w-full justify-between bg-primary text-primary-foreground font-bold"
+                  onClick={() => window.open(`/tour/${result.shareToken}`, "_blank")}
+                >
+                  Open 3D Tour <ExternalLink className="w-4 h-4" />
+                </Button>
 
                 <Button
                   variant="ghost"
@@ -625,8 +654,8 @@ export default function NewTour() {
               </div>
             </div>
 
-            {/* Embed the WorldLabs 3D tour in an iframe if available */}
-            {result.generatedTourUrl && (
+            {/* Inline preview of the WVision tour viewer */}
+            {result.shareToken && (
               <div className="px-6 pb-6">
                 <div className="border border-border rounded-xl overflow-hidden">
                   <div className="px-4 py-2 border-b border-border bg-muted/30 flex items-center gap-2 text-xs text-muted-foreground">
@@ -634,7 +663,7 @@ export default function NewTour() {
                     <span>3D World Preview</span>
                   </div>
                   <iframe
-                    src={result.generatedTourUrl}
+                    src={`/tour/${result.shareToken}`}
                     className="w-full aspect-video border-0"
                     allow="xr-spatial-tracking; gyroscope; accelerometer"
                     allowFullScreen
