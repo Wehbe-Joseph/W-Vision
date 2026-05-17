@@ -5,10 +5,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Mail, Phone, Shield, Palette, Camera } from "lucide-react";
 
 export default function Settings() {
   const { data: profile, isLoading } = useGetUserProfile();
@@ -35,14 +35,28 @@ export default function Settings() {
     }
   };
 
-  if (isLoading) return <div className="p-6"><Skeleton className="h-[600px] rounded-xl" /></div>;
+  if (isLoading) return <div className="p-6"><Skeleton className="h-[600px] rounded-2xl" /></div>;
 
   return (
-    <div className="p-6 max-w-4xl mx-auto w-full">
-      <h1 className="text-3xl font-serif font-bold mb-8">Settings</h1>
+    <div className="relative p-6 max-w-6xl mx-auto w-full space-y-6">
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -top-16 -right-16 h-72 w-72 rounded-full bg-gradient-to-br from-violet-200/35 to-transparent blur-3xl" />
+      </div>
+
+      <div className="relative rounded-3xl border border-zinc-200 bg-white/90 backdrop-blur p-6 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.45)]">
+        <div className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-[#f5f4ef] px-3 py-1">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-600">
+            Settings
+          </span>
+        </div>
+        <h1 className="mt-3 text-3xl md:text-4xl font-semibold tracking-tight text-zinc-900">Account & Preferences</h1>
+        <p className="text-zinc-500 mt-1 text-sm">
+          Manage your profile details and workspace preferences.
+        </p>
+      </div>
 
       <Tabs defaultValue="profile" className="w-full">
-        <TabsList className="grid w-full grid-cols-4 bg-card border border-border mb-8">
+        <TabsList className="grid w-full grid-cols-4 rounded-2xl bg-white border border-zinc-200 mb-6 p-1 h-auto">
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="branding">Branding</TabsTrigger>
@@ -50,35 +64,40 @@ export default function Settings() {
         </TabsList>
         
         <TabsContent value="profile">
-          <Card className="bg-card border-border">
+          <Card className="bg-white border-zinc-200 rounded-2xl shadow-[0_14px_28px_-20px_rgba(0,0,0,0.5)]">
             <CardHeader>
               <CardTitle>Profile Information</CardTitle>
               <CardDescription>Update your personal details here.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="flex items-center gap-6">
-                <Avatar className="w-20 h-20 border border-border">
-                  <AvatarFallback className="text-2xl bg-muted text-muted-foreground">{name?.substring(0,2).toUpperCase()}</AvatarFallback>
+                <Avatar className="w-20 h-20 border border-zinc-200">
+                  <AvatarFallback className="text-2xl bg-zinc-900 text-white">
+                    {name?.substring(0,2).toUpperCase()}
+                  </AvatarFallback>
                 </Avatar>
-                <Button variant="outline">Change Avatar</Button>
+                <Button variant="outline" className="rounded-xl border-zinc-300">
+                  <Camera className="w-4 h-4 mr-2" />
+                  Change Avatar
+                </Button>
               </div>
               <div className="grid gap-4">
                 <div className="space-y-2">
                   <Label>Full Name</Label>
-                  <Input value={name} onChange={e => setName(e.target.value)} className="bg-background" />
+                  <Input value={name} onChange={e => setName(e.target.value)} className="bg-[#faf9f5] border-zinc-300 rounded-xl" />
                 </div>
                 <div className="space-y-2">
                   <Label>Email (Cannot be changed)</Label>
-                  <Input value={email} disabled className="bg-muted opacity-50" />
+                  <Input value={email} disabled className="bg-zinc-100 border-zinc-200 opacity-70 rounded-xl" />
                 </div>
                 <div className="space-y-2">
                   <Label>WhatsApp Number</Label>
-                  <Input value={whatsapp} onChange={e => setWhatsapp(e.target.value)} className="bg-background" />
+                  <Input value={whatsapp} onChange={e => setWhatsapp(e.target.value)} className="bg-[#faf9f5] border-zinc-300 rounded-xl" />
                 </div>
               </div>
             </CardContent>
-            <CardFooter className="border-t border-border pt-6">
-              <Button onClick={handleSaveProfile} className="bg-primary text-primary-foreground font-bold" disabled={updateMutation.isPending}>
+            <CardFooter className="border-t border-zinc-200 pt-6">
+              <Button onClick={handleSaveProfile} className="rounded-xl bg-zinc-900 text-white hover:bg-zinc-800 font-semibold" disabled={updateMutation.isPending}>
                 {updateMutation.isPending ? "Saving..." : "Save Changes"}
               </Button>
             </CardFooter>
@@ -86,55 +105,62 @@ export default function Settings() {
         </TabsContent>
 
         <TabsContent value="notifications">
-           <Card className="bg-card border-border">
+           <Card className="bg-white border-zinc-200 rounded-2xl shadow-[0_14px_28px_-20px_rgba(0,0,0,0.5)]">
             <CardHeader>
               <CardTitle>Notification Preferences</CardTitle>
-              <CardDescription>Choose how we contact you.</CardDescription>
+              <CardDescription>Notification channels are based on your saved contact details.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="flex items-center justify-between">
+              <div className="rounded-xl border border-zinc-200 bg-[#faf9f5] px-4 py-3 flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <Label>Email Alerts</Label>
-                  <p className="text-sm text-muted-foreground">Receive an email when a tour finishes processing.</p>
+                  <div className="inline-flex items-center gap-2">
+                    <Mail className="w-4 h-4 text-zinc-500" />
+                    <Label>Email Alerts</Label>
+                  </div>
+                  <p className="text-sm text-muted-foreground">{profile?.email || "No email configured"}</p>
                 </div>
-                <Switch defaultChecked />
+                <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                  {profile?.email ? "Enabled" : "Unavailable"}
+                </span>
               </div>
-              <div className="flex items-center justify-between">
+              <div className="rounded-xl border border-zinc-200 bg-[#faf9f5] px-4 py-3 flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <Label>WhatsApp Alerts</Label>
-                  <p className="text-sm text-muted-foreground">Receive a message when a tour finishes processing.</p>
+                  <div className="inline-flex items-center gap-2">
+                    <Phone className="w-4 h-4 text-zinc-500" />
+                    <Label>WhatsApp Alerts</Label>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {profile?.whatsappNumber || "No WhatsApp number configured"}
+                  </p>
                 </div>
-                <Switch defaultChecked />
+                <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                  {profile?.whatsappNumber ? "Enabled" : "Unavailable"}
+                </span>
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="branding">
-           <Card className="bg-card border-border relative overflow-hidden">
-            {profile?.subscriptionTier === 'free' && (
-              <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center p-6 text-center">
-                <h3 className="text-xl font-bold mb-2">Pro Feature</h3>
-                <p className="text-muted-foreground mb-4">Upgrade to add your agency logo and colors to tours.</p>
-                <Button className="bg-primary text-primary-foreground">Upgrade to Pro</Button>
-              </div>
-            )}
+           <Card className="bg-white border-zinc-200 rounded-2xl shadow-[0_14px_28px_-20px_rgba(0,0,0,0.5)] relative overflow-hidden">
             <CardHeader>
               <CardTitle>Custom Branding</CardTitle>
-              <CardDescription>Customize how your tours appear to buyers.</CardDescription>
+              <CardDescription>Branding fields are not configured in your current workspace yet.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="space-y-2">
-                <Label>Agency Logo</Label>
-                <div className="border-2 border-dashed border-border rounded-xl p-8 text-center text-muted-foreground hover:bg-accent transition-colors cursor-pointer">
-                  Click to upload logo
+              <div className="rounded-xl border border-zinc-200 bg-[#faf9f5] p-5">
+                <div className="inline-flex items-center gap-2 mb-2">
+                  <Palette className="w-4 h-4 text-zinc-500" />
+                  <Label>Agency Logo</Label>
                 </div>
+                <p className="text-sm text-muted-foreground">
+                  Logo uploads will appear here once branding endpoints are enabled.
+                </p>
               </div>
-              <div className="space-y-2">
+              <div className="rounded-xl border border-zinc-200 bg-[#faf9f5] p-5">
                 <Label>Primary Brand Color</Label>
-                <div className="flex gap-4">
-                  <Input type="color" defaultValue="#00FF88" className="w-16 h-12 p-1 bg-background" />
-                  <Input defaultValue="#00FF88" className="flex-1 bg-background font-mono uppercase" />
+                <div className="mt-2 text-sm text-muted-foreground">
+                  No custom brand color set.
                 </div>
               </div>
             </CardContent>
@@ -142,9 +168,12 @@ export default function Settings() {
         </TabsContent>
         
         <TabsContent value="security">
-          <Card className="bg-card border-border border-destructive/20">
+          <Card className="bg-white border-zinc-200 rounded-2xl shadow-[0_14px_28px_-20px_rgba(0,0,0,0.5)] border-destructive/30">
             <CardHeader>
-              <CardTitle className="text-destructive">Danger Zone</CardTitle>
+              <CardTitle className="text-destructive inline-flex items-center gap-2">
+                <Shield className="w-4 h-4" />
+                Danger Zone
+              </CardTitle>
               <CardDescription>Irreversible actions.</CardDescription>
             </CardHeader>
             <CardContent>

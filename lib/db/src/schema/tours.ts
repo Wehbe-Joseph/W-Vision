@@ -25,6 +25,8 @@ export const toursTable = pgTable("tours", {
   aiHighAngles: integer("ai_high_angles").notNull().default(0),
   aiLowAngles: integer("ai_low_angles").notNull().default(0),
   marbleWorldIds: jsonb("marble_world_ids"),
+  /** Per-room 3D jobs (Gemini groups + Marble) — survives api-server restart. */
+  generationScenes: jsonb("generation_scenes"),
   tourEmbedUrl: text("tour_embed_url"),
   shareToken: text("share_token").unique(),
   isWatermarked: boolean("is_watermarked").notNull().default(true),

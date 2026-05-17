@@ -33,6 +33,7 @@ app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 app.use(authMiddleware);
 
+// All REST handlers live under `/api` (see `routes/index.ts`).
 app.use("/api", router);
 
 export default app;

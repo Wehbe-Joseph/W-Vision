@@ -1,8 +1,27 @@
+import { randomBytes } from "node:crypto";
 import { db } from "@workspace/db";
 import { toursTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { logger } from "./logger";
-import { getMemTour, updateMemTour } from "./tourMemoryStore";
+import {
+  getMemTour,
+  updateMemTour,
+  updateMemScene,
+  rollupMemTourFromScenes,
+} from "./tourMemoryStore";
+import { queuePersistTourScenes } from "./tourScenesPersistence";
+import { mirrorSpzToSupabase, isSplatStorageConfigured } from "./supabaseSpzMirror";
+import { saveTourPhotoWorldEmbed } from "./tourPhotoWorldEmbed";
+
+/**
+ * Poll keys are `tourId` or `tourId::sceneId`. We support both so a single
+ * tour can run many Marble worlds in parallel (one per room).
+ */
+function splitPollKey(key: string): { tourId: string; sceneId: string | null } {
+  const idx = key.indexOf("::");
+  if (idx === -1) return { tourId: key, sceneId: null };
+  return { tourId: key.slice(0, idx), sceneId: key.slice(idx + 2) };
+}
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 //
@@ -14,7 +33,23 @@ const WORLDLABS_API_BASE = "https://api.worldlabs.ai";
 const WORLDLABS_API_KEY = process.env.WORLD_LABS_API_KEY ?? "";
 const MARBLE_MODEL = process.env.WORLD_LABS_MODEL ?? "marble-1.1";
 
-const POLL_INTERVAL_MS = 15_000;
+/** Prefix for synthetic operation ids when Marble is turned off for local testing. */
+export const WORLD_LABS_DRY_RUN_PREFIX = "dry-run:";
+
+/**
+ * When false, `createWorld` never calls Marble (no credits). Polling resolves
+ * immediately with no embed URL. Set `WORLD_LABS_ENABLED=false` in `.env`.
+ */
+export function isWorldLabsEnabled(): boolean {
+  const v = (process.env.WORLD_LABS_ENABLED ?? "true").toLowerCase().trim();
+  return v !== "false" && v !== "0" && v !== "no" && v !== "off";
+}
+
+export function isDryRunOperationId(operationId: string): boolean {
+  return operationId.startsWith(WORLD_LABS_DRY_RUN_PREFIX);
+}
+
+const POLL_INTERVAL_MS = 8000;
 const MAX_RETRIES = 3;
 const MAX_POLL_DURATION_MS = 30 * 60 * 1000; // 30 min upper bound
 
@@ -39,7 +74,11 @@ interface MarbleOperation {
 interface MarbleWorld {
   id: string;
   display_name: string | null;
-  world_marble_url: string;
+  world_marble_url?: string;
+  spz_url?: string;
+  download_url?: string;
+  /** Some API versions expose a direct SPZ export URL here. */
+  exports?: { spz_url?: string };
   assets?: {
     caption?: string;
     thumbnail_url?: string;
@@ -55,6 +94,24 @@ interface MarbleWorld {
   };
 }
 
+/** HTTPS URL to download the finished Gaussian splat (.spz) — never a viewer page. */
+function extractSplatSourceUrl(world: MarbleWorld | null): string | null {
+  if (!world) return null;
+  const ex = world.exports?.spz_url;
+  if (typeof ex === "string" && ex.startsWith("http")) return ex;
+  if (typeof world.spz_url === "string" && world.spz_url.startsWith("http")) {
+    return world.spz_url;
+  }
+  if (
+    typeof world.download_url === "string" &&
+    world.download_url.startsWith("http")
+  ) {
+    return world.download_url;
+  }
+  const spz = world.assets?.splats?.spz_urls;
+  return spz?.full_res ?? spz?.["500k"] ?? spz?.["100k"] ?? null;
+}
+
 export interface CreateWorldResult {
   /** Long-running operation id returned by `worlds:generate`. */
   operationId: string;
@@ -63,10 +120,10 @@ export interface CreateWorldResult {
 interface WorldStatusResult {
   generationStatus: "queued" | "processing" | "completed" | "failed";
   worldlabsStatus: ProgressStatus | "UNKNOWN";
-  /** The generated world id (only populated once Marble starts producing one). */
+  /** World Labs world id (internal). */
   worldId: string | null;
-  /** Public marble.worldlabs.ai URL we can embed in an iframe. */
-  tourUrl: string | null;
+  /** Temporary HTTPS URL to the SPZ on World Labs' CDN — mirror to Supabase Storage before exposing to browsers. */
+  splatSourceUrl: string | null;
   previewImageUrl: string | null;
   error: string | null;
 }
@@ -96,11 +153,6 @@ function mapProgress(s: ProgressStatus | undefined): WorldStatusResult["generati
   }
 }
 
-function marbleEmbedUrl(worldId: string | null | undefined): string | null {
-  if (!worldId) return null;
-  return `https://marble.worldlabs.ai/world/${worldId}`;
-}
-
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
@@ -113,14 +165,23 @@ function marbleEmbedUrl(worldId: string | null | undefined): string | null {
  * silently 404-ing for months).
  */
 export async function createWorld(imageUrls: string[]): Promise<CreateWorldResult> {
-  if (!WORLDLABS_API_KEY) {
-    throw new Error("WORLD_LABS_API_KEY is not configured");
-  }
-
   // Marble caps multi-image prompts; trim defensively.
   const usable = imageUrls.filter((u) => !!u && u.startsWith("https://")).slice(0, 8);
   if (usable.length === 0) {
     throw new Error("At least one public https:// image URL is required");
+  }
+
+  if (!isWorldLabsEnabled()) {
+    const operationId = `${WORLD_LABS_DRY_RUN_PREFIX}${randomBytes(16).toString("hex")}`;
+    logger.warn(
+      { operationId },
+      "World Labs disabled (WORLD_LABS_ENABLED=false) — skipping worlds:generate; no Marble credits used",
+    );
+    return { operationId };
+  }
+
+  if (!WORLDLABS_API_KEY) {
+    throw new Error("WORLD_LABS_API_KEY is not configured");
   }
 
   let worldPrompt: Record<string, unknown>;
@@ -130,14 +191,11 @@ export async function createWorld(imageUrls: string[]): Promise<CreateWorldResul
       image_prompt: { source: "uri", uri: usable[0] },
     };
   } else {
-    // Spread azimuths roughly evenly around the circle so Marble has
-    // some directional hint when reconstructing the room. The user can
-    // refine these later in the Marble UI.
-    const step = 360 / usable.length;
+    // Let the spatial AI engine infer relative camera placement via
+    // automatic layout. We intentionally omit azimuth values here.
     worldPrompt = {
       type: "multi-image",
-      multi_image_prompt: usable.map((uri, i) => ({
-        azimuth: Math.round(i * step),
+      multi_image_prompt: usable.map((uri) => ({
         content: { source: "uri", uri },
       })),
     };
@@ -179,6 +237,17 @@ export async function createWorld(imageUrls: string[]): Promise<CreateWorldResul
 export async function getOperationStatus(
   operationId: string,
 ): Promise<WorldStatusResult> {
+  if (isDryRunOperationId(operationId)) {
+    return {
+      generationStatus: "completed",
+      worldlabsStatus: "SUCCEEDED",
+      worldId: null,
+      splatSourceUrl: null,
+      previewImageUrl: null,
+      error: null,
+    };
+  }
+
   const res = await fetch(
     `${WORLDLABS_API_BASE}/marble/v1/operations/${encodeURIComponent(operationId)}`,
     { headers: authHeaders() },
@@ -195,17 +264,25 @@ export async function getOperationStatus(
   const progress = op.metadata?.progress?.status;
   const worldId = op.metadata?.world_id ?? op.response?.id ?? null;
 
+  // Marble's real responses don't always populate `metadata.progress.status`.
+  // Once `done` is true (and there's no error) the operation succeeded; while
+  // `done` is false but Marble has assigned a `world_id`, the build is in
+  // flight. Otherwise we fall back to whatever progress label was returned.
   let generationStatus: WorldStatusResult["generationStatus"];
   if (op.done && op.error) {
     generationStatus = "failed";
-  } else if (op.done && op.response) {
+  } else if (op.done) {
     generationStatus = "completed";
+  } else if (worldId) {
+    generationStatus = "processing";
   } else {
     generationStatus = mapProgress(progress);
   }
 
-  const tourUrl =
-    op.response?.world_marble_url ?? marbleEmbedUrl(worldId);
+  const splatSourceUrl =
+    generationStatus === "completed" && !op.error
+      ? extractSplatSourceUrl(op.response)
+      : null;
 
   const previewImageUrl =
     op.response?.assets?.thumbnail_url ??
@@ -222,7 +299,7 @@ export async function getOperationStatus(
     generationStatus,
     worldlabsStatus: progress ?? "UNKNOWN",
     worldId,
-    tourUrl,
+    splatSourceUrl,
     previewImageUrl,
     error: generationStatus === "failed" ? error : null,
   };
@@ -242,12 +319,13 @@ export function schedulePoll(
 }
 
 function doSchedule(tourId: string, operationId: string, startedAt: Date) {
+  const delayMs = isDryRunOperationId(operationId) ? 0 : POLL_INTERVAL_MS;
   const handle = setTimeout(() => {
     activePollTimers.delete(tourId);
     pollTour(tourId, operationId, startedAt).catch((err) => {
       logger.error({ err, tourId }, "Poll error");
     });
-  }, POLL_INTERVAL_MS);
+  }, delayMs);
   activePollTimers.set(tourId, handle);
 }
 
@@ -264,53 +342,70 @@ async function safeDbUpdate(
 }
 
 async function pollTour(
-  tourId: string,
+  pollKey: string,
   operationId: string,
   startedAt: Date,
 ): Promise<void> {
+  const { tourId, sceneId } = splitPollKey(pollKey);
   const elapsed = Date.now() - startedAt.getTime();
   const memTour = getMemTour(tourId);
 
   if (elapsed > MAX_POLL_DURATION_MS) {
-    logger.warn({ tourId }, "Tour generation timed out");
-    updateMemTour(tourId, {
-      generationStatus: "failed",
-      currentStage: "failed",
-      errorMessage: "Generation timed out after 30 minutes",
-    });
-    await safeDbUpdate(
-      tourId,
-      {
+    logger.warn({ tourId, sceneId }, "Tour generation timed out");
+    if (sceneId) {
+      updateMemScene(tourId, sceneId, {
         generationStatus: "failed",
-        status: "failed",
         errorMessage: "Generation timed out after 30 minutes",
-        processingCompletedAt: new Date(),
+      });
+      rollupMemTourFromScenes(tourId);
+      queuePersistTourScenes(tourId);
+    } else {
+      updateMemTour(tourId, {
+        generationStatus: "failed",
         currentStage: "failed",
-      },
-      "timeout",
-    );
+        errorMessage: "Generation timed out after 30 minutes",
+      });
+      await safeDbUpdate(
+        tourId,
+        {
+          generationStatus: "failed",
+          status: "failed",
+          errorMessage: "Generation timed out after 30 minutes",
+          processingCompletedAt: new Date(),
+          currentStage: "failed",
+        },
+        "timeout",
+      );
+    }
     return;
   }
 
-  // Check whether we should stop polling — the source of truth is whichever
-  // store currently shows a terminal state.
+  // For per-scene polling we rely entirely on the in-memory mirror; the
+  // tours table only tracks the parent tour's rolled-up state.
   let dbStatus: string | null = null;
   let dbRetries = 0;
   let dbThumb: string | null = null;
-  try {
-    const tour = await db.query.toursTable.findFirst({
-      where: eq(toursTable.id, tourId),
-    });
-    if (tour) {
-      dbStatus = tour.generationStatus ?? null;
-      dbRetries = tour.generationRetries ?? 0;
-      dbThumb = tour.thumbnailUrl ?? null;
+  if (!sceneId) {
+    try {
+      const tour = await db.query.toursTable.findFirst({
+        where: eq(toursTable.id, tourId),
+      });
+      if (tour) {
+        dbStatus = tour.generationStatus ?? null;
+        dbRetries = tour.generationRetries ?? 0;
+        dbThumb = tour.thumbnailUrl ?? null;
+      }
+    } catch (err) {
+      logger.warn({ err, tourId }, "DB lookup during poll failed — using memory store");
     }
-  } catch (err) {
-    logger.warn({ err, tourId }, "DB lookup during poll failed — using memory store");
   }
 
-  const effectiveStatus = dbStatus ?? memTour?.generationStatus ?? "queued";
+  // Stop polling when we already have a terminal status for THIS unit
+  // (scene or tour).
+  const currentMemStatus = sceneId
+    ? memTour?.scenes.find((s) => s.id === sceneId)?.generationStatus
+    : memTour?.generationStatus;
+  const effectiveStatus = dbStatus ?? currentMemStatus ?? "queued";
   if (effectiveStatus === "completed" || effectiveStatus === "failed") {
     return;
   }
@@ -319,54 +414,192 @@ async function pollTour(
     const result = await getOperationStatus(operationId);
 
     if (result.generationStatus === "completed") {
-      updateMemTour(tourId, {
-        generationStatus: "completed",
-        currentStage: "ready",
-        worldId: result.worldId,
-        generatedTourUrl: result.tourUrl,
-        previewImageUrl: result.previewImageUrl,
-      });
-      await safeDbUpdate(
-        tourId,
-        {
+      const readyStage = isDryRunOperationId(operationId)
+        ? "Ready (Marble off — WORLD_LABS_ENABLED=false; no credits used)"
+        : "ready";
+
+      const dryRun = isDryRunOperationId(operationId);
+      let hostedSplatUrl: string | null = null;
+
+      if (!dryRun) {
+        if (!result.splatSourceUrl) {
+          const msg =
+            "Generation finished but no SPZ export URL was returned by the provider.";
+          if (sceneId) {
+            updateMemScene(tourId, sceneId, {
+              generationStatus: "failed",
+              errorMessage: msg,
+            });
+            rollupMemTourFromScenes(tourId);
+            queuePersistTourScenes(tourId);
+          } else {
+            updateMemTour(tourId, {
+              generationStatus: "failed",
+              currentStage: "failed",
+              errorMessage: msg,
+            });
+            await safeDbUpdate(
+              tourId,
+              {
+                generationStatus: "failed",
+                status: "failed",
+                errorMessage: msg,
+                processingCompletedAt: new Date(),
+                currentStage: "failed",
+              },
+              "completion-no-spz",
+            );
+          }
+          logger.warn({ tourId, sceneId, operationId }, msg);
+          return;
+        }
+        if (!isSplatStorageConfigured()) {
+          const msg =
+            "Supabase Storage is not configured for .spz uploads — set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY, and ensure a public Storage bucket named \"tours\" exists (see server boot logs).";
+          if (sceneId) {
+            updateMemScene(tourId, sceneId, {
+              generationStatus: "failed",
+              errorMessage: msg,
+            });
+            rollupMemTourFromScenes(tourId);
+            queuePersistTourScenes(tourId);
+          } else {
+            updateMemTour(tourId, {
+              generationStatus: "failed",
+              currentStage: "failed",
+              errorMessage: msg,
+            });
+            await safeDbUpdate(
+              tourId,
+              {
+                generationStatus: "failed",
+                status: "failed",
+                errorMessage: msg,
+                processingCompletedAt: new Date(),
+                currentStage: "failed",
+              },
+              "completion-no-splat-storage",
+            );
+          }
+          logger.error({ tourId, sceneId }, msg);
+          return;
+        }
+        try {
+          hostedSplatUrl = await mirrorSpzToSupabase({
+            tourId,
+            roomKey: sceneId ?? "tour",
+            sourceUrl: result.splatSourceUrl,
+          });
+        } catch (err) {
+          const msg =
+            err instanceof Error ? err.message : "Failed to mirror SPZ to Supabase Storage.";
+          logger.error({ err, tourId, sceneId }, "SPZ mirror failed");
+          if (sceneId) {
+            updateMemScene(tourId, sceneId, {
+              generationStatus: "failed",
+              errorMessage: msg,
+            });
+            rollupMemTourFromScenes(tourId);
+            queuePersistTourScenes(tourId);
+          } else {
+            updateMemTour(tourId, {
+              generationStatus: "failed",
+              currentStage: "failed",
+              errorMessage: msg,
+            });
+            await safeDbUpdate(
+              tourId,
+              {
+                generationStatus: "failed",
+                status: "failed",
+                errorMessage: msg,
+                processingCompletedAt: new Date(),
+                currentStage: "failed",
+              },
+              "completion-spz-mirror-failed",
+            );
+          }
+          return;
+        }
+      }
+
+      if (sceneId) {
+        const sceneMeta = memTour?.scenes.find((s) => s.id === sceneId);
+        updateMemScene(tourId, sceneId, {
           generationStatus: "completed",
-          status: "ready",
-          worldlabsJobId: result.worldId ?? operationId,
-          generatedTourUrl: result.tourUrl,
+          worldId: result.worldId,
+          generatedTourUrl: hostedSplatUrl,
+        });
+        rollupMemTourFromScenes(tourId);
+        queuePersistTourScenes(tourId);
+        if (hostedSplatUrl && sceneMeta?.label) {
+          void saveTourPhotoWorldEmbed(tourId, sceneMeta.label, hostedSplatUrl);
+        }
+      } else {
+        updateMemTour(tourId, {
+          generationStatus: "completed",
+          currentStage: readyStage,
+          worldId: result.worldId,
+          generatedTourUrl: hostedSplatUrl,
           previewImageUrl: result.previewImageUrl,
-          thumbnailUrl: result.previewImageUrl ?? dbThumb ?? undefined,
-          tourEmbedUrl: result.tourUrl,
-          processingCompletedAt: new Date(),
-          currentStage: "ready",
-        },
-        "completion",
-      );
+        });
+        await safeDbUpdate(
+          tourId,
+          {
+            generationStatus: "completed",
+            status: "ready",
+            worldlabsJobId: result.worldId ?? operationId,
+            generatedTourUrl: hostedSplatUrl,
+            previewImageUrl: result.previewImageUrl,
+            thumbnailUrl: result.previewImageUrl ?? dbThumb ?? undefined,
+            tourEmbedUrl: hostedSplatUrl,
+            processingCompletedAt: new Date(),
+            currentStage: readyStage,
+          },
+          "completion",
+        );
+      }
       logger.info(
-        { tourId, operationId, worldId: result.worldId, tourUrl: result.tourUrl },
+        {
+          tourId,
+          sceneId,
+          operationId,
+          worldId: result.worldId,
+          hostedSplatUrl: hostedSplatUrl ?? "(dry-run)",
+        },
         "Tour generation completed",
       );
       return;
     }
 
     if (result.generationStatus === "failed") {
-      updateMemTour(tourId, {
-        generationStatus: "failed",
-        currentStage: "failed",
-        errorMessage: result.error ?? "3D world generation failed",
-      });
-      await safeDbUpdate(
-        tourId,
-        {
+      if (sceneId) {
+        updateMemScene(tourId, sceneId, {
           generationStatus: "failed",
-          status: "failed",
           errorMessage: result.error ?? "3D world generation failed",
-          processingCompletedAt: new Date(),
+        });
+        rollupMemTourFromScenes(tourId);
+        queuePersistTourScenes(tourId);
+      } else {
+        updateMemTour(tourId, {
+          generationStatus: "failed",
           currentStage: "failed",
-        },
-        "failure",
-      );
+          errorMessage: result.error ?? "3D world generation failed",
+        });
+        await safeDbUpdate(
+          tourId,
+          {
+            generationStatus: "failed",
+            status: "failed",
+            errorMessage: result.error ?? "3D world generation failed",
+            processingCompletedAt: new Date(),
+            currentStage: "failed",
+          },
+          "failure",
+        );
+      }
       logger.warn(
-        { tourId, operationId, error: result.error },
+        { tourId, sceneId, operationId, error: result.error },
         "Tour generation failed",
       );
       return;
@@ -379,26 +612,44 @@ async function pollTour(
     };
     const stage = stageMap[result.generationStatus] ?? "Processing…";
 
-    updateMemTour(tourId, {
-      generationStatus: result.generationStatus,
-      currentStage: stage,
-      worldId: result.worldId ?? memTour?.worldId ?? null,
-    });
-    await safeDbUpdate(
-      tourId,
-      {
+    if (sceneId) {
+      updateMemScene(tourId, sceneId, {
+        generationStatus: result.generationStatus,
+        worldId: result.worldId ?? null,
+      });
+      rollupMemTourFromScenes(tourId);
+      queuePersistTourScenes(tourId);
+    } else {
+      updateMemTour(tourId, {
         generationStatus: result.generationStatus,
         currentStage: stage,
-      },
-      "progress",
-    );
+        worldId: result.worldId ?? memTour?.worldId ?? null,
+      });
+      await safeDbUpdate(
+        tourId,
+        {
+          generationStatus: result.generationStatus,
+          currentStage: stage,
+        },
+        "progress",
+      );
+    }
 
-    doSchedule(tourId, operationId, startedAt);
+    doSchedule(pollKey, operationId, startedAt);
   } catch (err) {
-    logger.error({ err, tourId, operationId }, "WorldLabs poll request failed");
+    logger.error({ err, tourId, sceneId, operationId }, "WorldLabs poll request failed");
 
     const retries = Math.max(dbRetries, memTour ? 0 : 0) + 1;
     if (retries >= MAX_RETRIES) {
+      if (sceneId) {
+        updateMemScene(tourId, sceneId, {
+          generationStatus: "failed",
+          errorMessage: "Failed to check generation status after multiple retries",
+        });
+        rollupMemTourFromScenes(tourId);
+        queuePersistTourScenes(tourId);
+        return;
+      }
       updateMemTour(tourId, {
         generationStatus: "failed",
         currentStage: "failed",
@@ -419,13 +670,15 @@ async function pollTour(
       return;
     }
 
-    await safeDbUpdate(
-      tourId,
-      { generationRetries: retries },
-      "retry-bump",
-    );
+    if (!sceneId) {
+      await safeDbUpdate(
+        tourId,
+        { generationRetries: retries },
+        "retry-bump",
+      );
+    }
 
-    doSchedule(tourId, operationId, startedAt);
+    doSchedule(pollKey, operationId, startedAt);
   }
 }
 

@@ -10,6 +10,7 @@ import {
   memTourCountThisMonthForUser,
   memTotalToursForUser,
   unfreezeAllToursForUser,
+  getMemTour,
 } from "../lib/tourMemoryStore";
 import {
   getMemUser,
@@ -135,6 +136,7 @@ router.get("/user/limits", async (req, res) => {
 
   let tier: SubscriptionTier = "free";
   let profileToursThisMonth: number | null = null;
+  let profileTotalTours: number | null = null;
 
   try {
     const profile = await db.query.profilesTable.findFirst({
@@ -143,6 +145,7 @@ router.get("/user/limits", async (req, res) => {
     if (profile) {
       tier = (profile.subscriptionTier as SubscriptionTier) || "free";
       profileToursThisMonth = profile.toursThisMonth ?? 0;
+      profileTotalTours = profile.totalTours ?? 0;
     } else {
       tier = getMemUser(userId).tier;
     }
@@ -151,15 +154,19 @@ router.get("/user/limits", async (req, res) => {
     tier = getMemUser(userId).tier;
   }
 
-  const memCount = memTourCountThisMonthForUser(userId);
-  const toursThisMonth = Math.max(profileToursThisMonth ?? 0, memCount);
+  const memCountThisMonth = memTourCountThisMonthForUser(userId);
+  const memTotalTours = memTotalToursForUser(userId);
+  const toursUsed =
+    tier === "free"
+      ? Math.max(profileTotalTours ?? 0, memTotalTours)
+      : Math.max(profileToursThisMonth ?? 0, memCountThisMonth);
   const limit = TOUR_LIMITS[tier] ?? 1;
 
   return res.json({
     tier,
-    toursThisMonth,
+    toursThisMonth: toursUsed,
     toursLimit: limit,
-    toursRemaining: Math.max(0, limit - toursThisMonth),
+    toursRemaining: Math.max(0, limit - toursUsed),
     renewalDate: null,
   });
 });
@@ -261,6 +268,20 @@ router.post("/subscribe", async (req, res) => {
   // Unfreeze every tour the user owns when they switch to a paid plan.
   const unfrozen = tier === "free" ? 0 : unfreezeAllToursForUser(userId);
 
+  // If the caller hinted at the tour they just upgraded from, surface how
+  // many locked rooms can now be resumed. The actual dispatch happens via
+  // POST /generate-tour/:tourId/resume which the frontend calls right after
+  // this responds.
+  const tourId =
+    typeof req.body?.tourId === "string" ? (req.body.tourId as string) : null;
+  let lockedRoomsForTour = 0;
+  if (tourId) {
+    const mem = getMemTour(tourId);
+    if (mem && mem.userId === userId) {
+      lockedRoomsForTour = mem.scenes.filter((s) => s.locked).length;
+    }
+  }
+
   return res.json({
     success: true,
     message:
@@ -269,6 +290,7 @@ router.post("/subscribe", async (req, res) => {
         : `Upgraded to ${tier} — unfroze ${unfrozen} tour${unfrozen === 1 ? "" : "s"}`,
     tier,
     unfrozen,
+    lockedRoomsForTour,
   });
 });
 

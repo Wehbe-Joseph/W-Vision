@@ -47,7 +47,11 @@ export async function ensureTourImagesBucket(): Promise<void> {
     return;
   }
 
-  const { error: createErr } = await supabaseAdmin.storage.createBucket(
+  // Same pattern as the .spz bucket: if the plan rejects the requested
+  // per-file limit (Supabase free tier caps file size and surfaces it as a
+  // 413 on createBucket itself), retry without an explicit limit so the
+  // bucket gets created and inherits the project default.
+  let { error: createErr } = await supabaseAdmin.storage.createBucket(
     TOUR_IMAGES_BUCKET,
     {
       public: true,
@@ -61,6 +65,28 @@ export async function ensureTourImagesBucket(): Promise<void> {
       ],
     },
   );
+
+  if (
+    createErr &&
+    /exceeded the maximum allowed size|maximum allowed size/i.test(
+      createErr.message,
+    )
+  ) {
+    const retry = await supabaseAdmin.storage.createBucket(
+      TOUR_IMAGES_BUCKET,
+      {
+        public: true,
+        allowedMimeTypes: [
+          "image/jpeg",
+          "image/png",
+          "image/webp",
+          "image/gif",
+          "image/avif",
+        ],
+      },
+    );
+    createErr = retry.error;
+  }
 
   if (createErr && !/already.?exists/i.test(createErr.message)) {
     logger.error(

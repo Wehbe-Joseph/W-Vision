@@ -1,14 +1,19 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { useGenerateTour, useGetGenerationStatus } from "@workspace/api-client-react";
+import {
+  useGenerateTour,
+  useGetGenerationStatus,
+  generateTour,
+  ApiError,
+} from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import {
   Link2, Loader2, CheckCircle2, Copy, ExternalLink, AlertCircle,
   ImagePlus, Upload, X, Sparkles, ChevronRight, RefreshCw,
-  Globe, Zap, Clock, Image as ImageIcon,
+  Globe, Zap, Clock, Image as ImageIcon, Home, Layers, Palette, Scan,
 } from "lucide-react";
 import {
   loadPendingTour, clearPendingTour,
@@ -45,6 +50,20 @@ function stageIndex(status: GenStatus) {
   return 0;
 }
 
+/**
+ * Stage messages cycled through during the "Working through your home" screen.
+ * Backend doesn't surface granular Spatial AI engine stages, so we display a synthetic
+ * sequence that loops while the user waits. Each step has a hint icon.
+ */
+const WORK_STAGES = [
+  { label: "Analyzing your photos",   icon: Scan },
+  { label: "Detecting rooms",         icon: Home },
+  { label: "Mapping spatial layout",  icon: Layers },
+  { label: "Building the 3D mesh",    icon: Globe },
+  { label: "Adding textures & light", icon: Palette },
+  { label: "Polishing your tour",     icon: Sparkles },
+] as const;
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function NewTour() {
@@ -52,15 +71,52 @@ export default function NewTour() {
   const [url, setUrl] = useState("");
   const [photos, setPhotos] = useState<PendingPhoto[]>([]);
   const [apifyImageUrls, setApifyImageUrls] = useState<string[]>([]);
+  // Per-image room/caption labels parsed from the listing scrape, indexed by
+  // image URL. Used to label the scanning badge with a real room name when
+  // we have one (e.g. "Living room") instead of a synthetic stage.
+  const [apifyImageLabels, setApifyImageLabels] = useState<
+    Record<string, string>
+  >({});
   const [result, setResult] = useState<GenerationResult | null>(null);
   const [dragging, setDragging] = useState(false);
   const [isFetchingImages, setIsFetchingImages] = useState(false);
+  // Snapshot of the images being worked on — shown in the processing screen's
+  // scanning gallery. Captured at submit time so it doesn't change if the user
+  // navigates back.
+  const [processingImages, setProcessingImages] = useState<string[]>([]);
+  // Per-room scenes from the backend (Gemini classification + Spatial AI dispatch).
+  // Populated as the status endpoint reports progress.
+  const [scenes, setScenes] = useState<
+    Array<{
+      id: string;
+      label: string;
+      roomType: string;
+      thumbnailUrl: string;
+      imageCount: number;
+      generationStatus: GenStatus;
+      generatedTourUrl: string | null;
+    }>
+  >([]);
 
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const fileRef = useRef<HTMLInputElement>(null);
-  const generateMutation = useGenerateTour();
   const { getAccessToken } = useAuth();
+  const generateMutation = useGenerateTour({
+    mutation: {
+      mutationFn: async (vars: { data: { listingUrl: string; imageUrls?: string[] } }) => {
+        const token = await getAccessToken();
+        if (!token) {
+          throw new Error(
+            "Your session expired — sign in again to generate a tour.",
+          );
+        }
+        return generateTour(vars.data, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      },
+    },
+  });
 
   // Load pending tour from sessionStorage on mount
   useEffect(() => {
@@ -71,41 +127,53 @@ export default function NewTour() {
     }
   }, []);
 
-  // Auto-extract Apify images when a URL is pasted (debounced)
+  // Auto-extract listing images via the api-server's Apify integration when
+  // the user pastes a supported URL (Airbnb today; Booking.com / Zillow next).
+  // Debounced so we don't fire on every keystroke.
   const apifyFetchRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (!url.trim() || url === "manual-upload") {
+    const trimmed = url.trim();
+    if (!trimmed || trimmed === "manual-upload") {
       setApifyImageUrls([]);
+      setApifyImageLabels({});
       return;
     }
     if (apifyFetchRef.current) clearTimeout(apifyFetchRef.current);
     apifyFetchRef.current = setTimeout(async () => {
       try {
         setIsFetchingImages(true);
-        const res = await fetch("/apify-server/get-images", {
+        const res = await fetch("/api/scrape-listing", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: url.trim() }),
+          body: JSON.stringify({ url: trimmed }),
         });
-        if (res.ok) {
-          const data = await res.json();
-          const images: string[] = [];
-          if (Array.isArray(data)) {
-            for (const item of data) {
-              if (item.photos) images.push(...item.photos.slice(0, 20));
-              if (item.imageUrls) images.push(...item.imageUrls.slice(0, 20));
-              if (item.images) {
-                for (const img of item.images) {
-                  if (typeof img === "string") images.push(img);
-                  else if (img?.url) images.push(img.url);
-                }
-              }
-            }
-          }
-          setApifyImageUrls(images.slice(0, 20));
+        if (!res.ok) {
+          // Unsupported platform (501) etc. — silently leave the user to
+          // upload photos manually; the input field's helper text already
+          // lists supported platforms.
+          setApifyImageUrls([]);
+          setApifyImageLabels({});
+          return;
         }
+        const body = (await res.json()) as {
+          success: boolean;
+          data?: {
+            images?: { url: string; caption?: string | null; room?: string | null }[];
+          };
+        };
+        const list = body?.data?.images ?? [];
+        const urls: string[] = [];
+        const labels: Record<string, string> = {};
+        for (const img of list) {
+          if (!img?.url) continue;
+          urls.push(img.url);
+          const label = img.room || img.caption;
+          if (label) labels[img.url] = label;
+        }
+        setApifyImageUrls(urls.slice(0, 20));
+        setApifyImageLabels(labels);
       } catch {
-        // Silently ignore Apify errors
+        // Network blip — silently ignore; user can still upload photos.
       } finally {
         setIsFetchingImages(false);
       }
@@ -212,37 +280,89 @@ export default function NewTour() {
 
       const allImageUrls = [...apifyImageUrls, ...uploadedUrls];
 
+      // Snapshot a preview-friendly set of images for the processing screen.
+      // We always want the user to see *their* photos — combine Apify-scraped
+      // listing photos with any locally uploaded photo data URLs so the
+      // scanning gallery is populated even if one source returned nothing.
+      const localPreviewUrls = photos.map((p) => p.dataUrl);
+      const galleryImages = [
+        ...apifyImageUrls,
+        ...localPreviewUrls,
+      ];
+      setProcessingImages(galleryImages.slice(0, 12));
+
       const res = await generateMutation.mutateAsync({
         data: {
           listingUrl: url.trim() || "manual-upload",
-          imageUrls: allImageUrls,
+          imageUrls: allImageUrls.filter(
+            (u): u is string => typeof u === "string" && u.length > 0,
+          ),
         },
       });
       setResult({
         tourId: res.tourId,
         shareToken: res.shareToken,
-        generationStatus: "queued",
+        // Skip the visual "queued" pause — by the time the response lands
+        // we're already past upload and image-prep on the server.
+        generationStatus: "processing",
         generatedTourUrl: null,
         previewImageUrl: null,
         confidenceScore: 0,
         roomsDetected: null,
-        currentStage: "Queued for generation…",
+        currentStage: "Analyzing your photos…",
         errorMessage: null,
       });
       clearPendingTour();
       setStep(2);
-    } catch {
+    } catch (err) {
       setIsUploading(false);
-      toast({ title: "Error", description: "Failed to start generation", variant: "destructive" });
+      let description =
+        "Something went wrong. Check your connection and try again.";
+      if (err instanceof ApiError) {
+        description = err.message;
+        const payload = err.data as {
+          error?: string;
+          code?: string;
+          message?: string;
+        } | null;
+        if (typeof payload?.error === "string" && payload.error.trim()) {
+          description = payload.error;
+        } else if (typeof payload?.message === "string" && payload.message.trim()) {
+          description = payload.message;
+        }
+      } else if (err instanceof Error) {
+        description = err.message;
+      }
+      const unauthorized =
+        (err instanceof ApiError && err.status === 401) ||
+        (err instanceof Error && /sign in|session expired/i.test(err.message));
+      const limitReached =
+        err instanceof ApiError &&
+        (err.status === 403 ||
+          (err.data as { code?: string } | null)?.code === "LIMIT_REACHED");
+      toast({
+        title: unauthorized
+          ? "Please sign in"
+          : limitReached
+          ? "Tour limit reached"
+          : "Could not start generation",
+        description,
+        variant: "destructive",
+      });
+      if (unauthorized) {
+        setLocation("/login");
+      }
     }
   };
 
-  // Poll generation status
+  // Poll generation status — fast (2.5s) so the user moves out of "queued"
+  // immediately when the backend updates the status, and lands on "completed"
+  // the moment the spatial AI engine (or the dry-run fallback) finishes.
   const tourId = result?.tourId ?? null;
   const { data: statusData } = useGetGenerationStatus(tourId as string, {
     query: {
       enabled: !!tourId && step === 2,
-      refetchInterval: 8000,
+      refetchInterval: 2500,
       queryKey: ["gen-status", tourId],
     },
   });
@@ -250,20 +370,40 @@ export default function NewTour() {
   useEffect(() => {
     if (!statusData) return;
     const gs = statusData.generationStatus as GenStatus;
-    setResult((prev) =>
-      prev
-        ? {
-            ...prev,
-            generationStatus: gs,
-            generatedTourUrl: statusData.generatedTourUrl ?? prev.generatedTourUrl,
-            previewImageUrl: statusData.previewImageUrl ?? prev.previewImageUrl,
-            confidenceScore: statusData.confidenceScore ?? prev.confidenceScore,
-            roomsDetected: statusData.roomsDetected ?? prev.roomsDetected,
-            currentStage: statusData.currentStage ?? prev.currentStage,
-            errorMessage: statusData.errorMessage ?? prev.errorMessage,
-          }
-        : prev,
-    );
+    // The generated `GenerationStatus` type doesn't yet include `scenes` —
+    // cast through unknown so we can pick it up without regenerating the
+    // OpenAPI client.
+    const extendedStatus = statusData as unknown as {
+      scenes?: Array<{
+        id: string;
+        label: string;
+        roomType: string;
+        thumbnailUrl: string;
+        imageCount: number;
+        generationStatus: GenStatus;
+        generatedTourUrl: string | null;
+      }>;
+    };
+    setResult((prev) => {
+      if (!prev) return prev;
+      const nextStatus: GenStatus =
+        gs === "queued" && prev.generationStatus === "processing"
+          ? "processing"
+          : gs;
+      return {
+        ...prev,
+        generationStatus: nextStatus,
+        generatedTourUrl: statusData.generatedTourUrl ?? prev.generatedTourUrl,
+        previewImageUrl: statusData.previewImageUrl ?? prev.previewImageUrl,
+        confidenceScore: statusData.confidenceScore ?? prev.confidenceScore,
+        roomsDetected: statusData.roomsDetected ?? prev.roomsDetected,
+        currentStage: statusData.currentStage ?? prev.currentStage,
+        errorMessage: statusData.errorMessage ?? prev.errorMessage,
+      };
+    });
+    if (extendedStatus.scenes) {
+      setScenes(extendedStatus.scenes);
+    }
     if (gs === "completed") setStep(3);
     if (gs === "failed") setStep(4);
   }, [statusData]);
@@ -274,6 +414,32 @@ export default function NewTour() {
   const totalImages = apifyImageUrls.length + photos.length;
 
   const shareUrl = result ? `${window.location.origin}/tour/${result.shareToken}` : "";
+
+  // Cycle a synthetic "work stage" every 4s while step 2 is visible so the
+  // user sees motion even if the backend doesn't push fine-grained progress.
+  const [workStageIndex, setWorkStageIndex] = useState(0);
+  useEffect(() => {
+    if (step !== 2) return;
+    const id = window.setInterval(() => {
+      setWorkStageIndex((i) => (i + 1) % WORK_STAGES.length);
+    }, 4000);
+    return () => window.clearInterval(id);
+  }, [step]);
+
+  // Highlight one image at a time in the scanning gallery (rotates every 2s).
+  const [scanIndex, setScanIndex] = useState(0);
+  useEffect(() => {
+    if (step !== 2 || processingImages.length <= 1) return;
+    const id = window.setInterval(() => {
+      setScanIndex((i) => (i + 1) % processingImages.length);
+    }, 2000);
+    return () => window.clearInterval(id);
+  }, [step, processingImages.length]);
+
+  const currentWorkStage = useMemo(
+    () => WORK_STAGES[workStageIndex],
+    [workStageIndex],
+  );
 
   return (
     <div className="flex-1 flex items-start justify-center p-6 relative">
@@ -490,87 +656,268 @@ export default function NewTour() {
           </motion.div>
         )}
 
-        {/* ── Step 2: Processing ────────────────────────────────────────── */}
+        {/* ── Step 2: Processing — "Working through your home" ──────────── */}
         {step === 2 && result && (
           <motion.div
             key="step2"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="w-full max-w-2xl text-center"
+            className="w-full max-w-4xl"
           >
-            {/* Spinner */}
-            <div className="relative w-24 h-24 mx-auto mb-8">
-              <div className="w-24 h-24 border-4 border-primary/20 rounded-full" />
-              <div className="absolute inset-0 w-24 h-24 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <Globe className="w-8 h-8 text-primary/60" />
-              </div>
-            </div>
-
-            <h2 className="text-3xl font-display font-bold mb-2">Building your 3D world…</h2>
-            <p className="text-primary font-mono text-sm mb-8">
-              {result.currentStage || "Initializing generation…"}
-            </p>
-
-            {/* Stage track */}
-            <div className="flex justify-center items-center gap-0 mb-10 max-w-sm mx-auto">
-              {STAGE_STEPS.map((s, i) => {
-                const current = stageIndex(result.generationStatus);
-                const done = i < current;
-                const active = i === current;
-                const Icon = s.icon;
-                return (
-                  <div key={s.key} className="flex items-center">
-                    <div className="flex flex-col items-center gap-1.5">
-                      <div
-                        className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${
-                          done
-                            ? "bg-primary border-primary text-primary-foreground"
-                            : active
-                            ? "border-primary text-primary bg-primary/10 animate-pulse"
-                            : "border-border text-muted-foreground bg-background"
-                        }`}
-                      >
-                        {done ? (
-                          <CheckCircle2 className="w-4 h-4" />
-                        ) : (
-                          <Icon className="w-3.5 h-3.5" />
-                        )}
-                      </div>
-                      <span className={`text-xs font-mono uppercase ${active ? "text-primary font-bold" : done ? "text-primary" : "text-muted-foreground"}`}>
-                        {s.label}
-                      </span>
-                    </div>
-                    {i < STAGE_STEPS.length - 1 && (
-                      <div
-                        className={`w-16 h-0.5 mx-1 mb-5 transition-all ${
-                          done ? "bg-primary" : "bg-border"
-                        }`}
-                      />
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="bg-card border border-border rounded-2xl p-6 text-left space-y-4">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Estimated time remaining</span>
-                <span className="font-mono font-bold">
-                  ~{statusData?.estimatedMinutes ?? 5} min
+            <div className="bg-card border-2 border-foreground shadow-[6px_6px_0px_0px_#1A1714] overflow-hidden">
+              {/* Window titlebar */}
+              <div className="flex items-center gap-2 px-4 py-2.5 border-b-2 border-foreground bg-foreground">
+                <span className="w-2 h-2 bg-primary animate-pulse" />
+                <span className="text-xs font-mono font-bold uppercase tracking-widest text-background">
+                  Working Through Your Home
+                </span>
+                <span className="ml-auto text-[10px] font-mono text-background/60 uppercase tracking-widest">
+                  Live
                 </span>
               </div>
-              {totalImages > 0 && (
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Images being processed</span>
-                  <span className="font-mono font-bold">{totalImages}</span>
+
+              <div className="p-6 md:p-8 grid md:grid-cols-[1fr_280px] gap-6">
+                {/* ── Scanning gallery ─────────────────────────────────── */}
+                <div className="space-y-4">
+                  {processingImages.length > 0 ? (
+                    <>
+                      <div className="relative aspect-[16/10] bg-foreground border-2 border-foreground overflow-hidden">
+                        <AnimatePresence mode="wait">
+                          <motion.img
+                            key={scanIndex}
+                            src={processingImages[scanIndex]}
+                            alt={`Listing photo ${scanIndex + 1}`}
+                            initial={{ opacity: 0, scale: 1.05 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.98 }}
+                            transition={{ duration: 0.5 }}
+                            className="absolute inset-0 w-full h-full object-cover"
+                          />
+                        </AnimatePresence>
+
+                        {/* Scanning line sweep */}
+                        <motion.div
+                          aria-hidden
+                          className="absolute left-0 right-0 h-0.5 bg-primary shadow-[0_0_24px_4px_rgba(255,0,90,0.6)] pointer-events-none"
+                          animate={{ top: ["0%", "100%", "0%"] }}
+                          transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+                        />
+
+                        {/* Grid overlay for that "AI scanning" feel */}
+                        <div
+                          aria-hidden
+                          className="absolute inset-0 pointer-events-none opacity-30"
+                          style={{
+                            backgroundImage:
+                              "linear-gradient(rgba(255,255,255,0.18) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.18) 1px, transparent 1px)",
+                            backgroundSize: "32px 32px",
+                          }}
+                        />
+
+                        {/* Bottom badge — prefer a real room label from the
+                            listing scrape over the synthetic stage label. */}
+                        <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2">
+                          <div className="bg-background/95 border-2 border-foreground px-2.5 py-1.5 flex items-center gap-2">
+                            {(() => {
+                              const StageIcon = currentWorkStage.icon;
+                              return <StageIcon className="w-3.5 h-3.5 text-primary" />;
+                            })()}
+                            <span className="text-[11px] font-mono font-bold uppercase tracking-widest">
+                              {(() => {
+                                const src = processingImages[scanIndex];
+                                const label = src ? apifyImageLabels[src] : null;
+                                return label
+                                  ? `Analyzing: ${label}`
+                                  : currentWorkStage.label;
+                              })()}
+                            </span>
+                          </div>
+                          <div className="bg-foreground border-2 border-foreground px-2 py-1 text-[10px] font-mono text-background uppercase tracking-widest">
+                            {scanIndex + 1} / {processingImages.length}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Thumbnail strip */}
+                      {processingImages.length > 1 && (
+                        <div className="flex gap-1.5 overflow-x-auto pb-1">
+                          {processingImages.map((src, i) => (
+                            <button
+                              key={`${src}-${i}`}
+                              type="button"
+                              onClick={() => setScanIndex(i)}
+                              className={`relative shrink-0 w-14 h-14 border-2 overflow-hidden transition-all ${
+                                i === scanIndex
+                                  ? "border-primary shadow-[2px_2px_0px_0px_#1A1714]"
+                                  : "border-foreground/30 opacity-60 hover:opacity-100"
+                              }`}
+                              aria-label={`Show photo ${i + 1}`}
+                            >
+                              <img src={src} alt="" className="w-full h-full object-cover" />
+                              {i === scanIndex && (
+                                <div className="absolute inset-0 ring-2 ring-primary ring-inset pointer-events-none" />
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    // Fallback when we have no images (rare — only if generation
+                    // started before photos were attached).
+                    <div className="relative aspect-[16/10] bg-foreground border-2 border-foreground overflow-hidden flex items-center justify-center">
+                      <div className="text-center text-background space-y-3">
+                        <div className="relative w-20 h-20 mx-auto">
+                          <div className="w-20 h-20 border-4 border-background/20 rounded-full" />
+                          <div className="absolute inset-0 w-20 h-20 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <Globe className="w-7 h-7 text-primary" />
+                          </div>
+                        </div>
+                        <p className="text-xs font-mono uppercase tracking-widest opacity-80">
+                          Building your 3D world…
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-              <div className="pt-2 border-t border-border">
-                <p className="text-xs text-muted-foreground">
-                  You can safely close this window — generation continues in the background.
-                  We'll update your dashboard when it's ready.
-                </p>
+
+                {/* ── Right column: stages + meta ──────────────────────── */}
+                <div className="flex flex-col gap-5">
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="w-2 h-2 bg-primary" />
+                      <span className="text-xs font-mono font-bold uppercase tracking-widest text-muted-foreground">
+                        Status
+                      </span>
+                    </div>
+                    <h2 className="font-serif text-2xl md:text-3xl leading-tight">
+                      Working through your home
+                    </h2>
+                    <p className="text-muted-foreground text-sm mt-1">
+                      Hang tight — your virtual tour is being assembled.
+                    </p>
+                  </div>
+
+                  {/* Live stage list */}
+                  <ul className="space-y-1.5">
+                    {WORK_STAGES.map((s, i) => {
+                      const Icon = s.icon;
+                      const done = i < workStageIndex;
+                      const active = i === workStageIndex;
+                      return (
+                        <li
+                          key={s.label}
+                          className={`flex items-center gap-2.5 px-3 py-2 border-2 transition-all ${
+                            active
+                              ? "border-foreground bg-primary/10"
+                              : done
+                              ? "border-foreground/20"
+                              : "border-transparent"
+                          }`}
+                        >
+                          <div
+                            className={`w-6 h-6 border-2 flex items-center justify-center shrink-0 ${
+                              done
+                                ? "bg-foreground border-foreground text-background"
+                                : active
+                                ? "border-foreground bg-background animate-pulse"
+                                : "border-foreground/30 bg-background text-muted-foreground"
+                            }`}
+                          >
+                            {done ? (
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                            ) : active ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Icon className="w-3 h-3" />
+                            )}
+                          </div>
+                          <span
+                            className={`text-xs font-mono uppercase tracking-wide ${
+                              active
+                                ? "font-bold"
+                                : done
+                                ? ""
+                                : "text-muted-foreground"
+                            }`}
+                          >
+                            {s.label}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+
+                  {/* Detected rooms — shows up once Gemini classification lands */}
+                  {scenes.length > 0 && (
+                    <div className="border-2 border-foreground/20 p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+                          Rooms detected
+                        </span>
+                        <span className="text-[10px] font-mono text-primary">
+                          {scenes.filter((s) => s.generationStatus === "completed").length}/{scenes.length} ready
+                        </span>
+                      </div>
+                      <ul className="space-y-1">
+                        {scenes.map((s) => {
+                          const ready = s.generationStatus === "completed";
+                          const failed = s.generationStatus === "failed";
+                          return (
+                            <li
+                              key={s.id}
+                              className="flex items-center gap-2 text-xs"
+                            >
+                              <img
+                                src={s.thumbnailUrl}
+                                alt=""
+                                className="w-6 h-6 rounded object-cover border border-foreground/10"
+                              />
+                              <span className="flex-1 truncate">{s.label}</span>
+                              <span className="text-[10px] font-mono text-muted-foreground">
+                                {s.imageCount} photo{s.imageCount === 1 ? "" : "s"}
+                              </span>
+                              {ready ? (
+                                <CheckCircle2 className="w-3.5 h-3.5 text-primary shrink-0" />
+                              ) : failed ? (
+                                <AlertCircle className="w-3.5 h-3.5 text-destructive shrink-0" />
+                              ) : (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground shrink-0" />
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Meta grid */}
+                  <div className="grid grid-cols-2 gap-2 pt-2">
+                    <div className="border-2 border-foreground/20 px-3 py-2">
+                      <div className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+                        Photos
+                      </div>
+                      <div className="font-bold text-lg">
+                        {processingImages.length || totalImages || "—"}
+                      </div>
+                    </div>
+                    <div className="border-2 border-foreground/20 px-3 py-2">
+                      <div className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+                        ETA
+                      </div>
+                      <div className="font-bold text-lg">
+                        ~{statusData?.estimatedMinutes ?? 3}m
+                      </div>
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-muted-foreground font-mono leading-relaxed">
+                    Safe to close this window — generation continues in the
+                    background and we'll surface it on your dashboard when it's
+                    ready.
+                  </p>
+                </div>
               </div>
             </div>
           </motion.div>
@@ -654,24 +1001,7 @@ export default function NewTour() {
               </div>
             </div>
 
-            {/* Inline preview of the WVision tour viewer */}
-            {result.shareToken && (
-              <div className="px-6 pb-6">
-                <div className="border border-border rounded-xl overflow-hidden">
-                  <div className="px-4 py-2 border-b border-border bg-muted/30 flex items-center gap-2 text-xs text-muted-foreground">
-                    <Globe className="w-3.5 h-3.5" />
-                    <span>3D World Preview</span>
-                  </div>
-                  <iframe
-                    src={`/tour/${result.shareToken}`}
-                    className="w-full aspect-video border-0"
-                    allow="xr-spatial-tracking; gyroscope; accelerometer"
-                    allowFullScreen
-                    title="3D Virtual Tour"
-                  />
-                </div>
-              </div>
-            )}
+            {/* 3D viewer opens in-app on the public tour route */}
           </motion.div>
         )}
 

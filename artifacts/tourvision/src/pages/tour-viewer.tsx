@@ -1,328 +1,509 @@
-import { useState } from "react";
-import { useParams, useLocation } from "wouter";
-import { useGetPublicTour } from "@workspace/api-client-react";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  Menu,
-  X,
-  Share2,
-  CheckCircle2,
-  AlertTriangle,
-  ArrowUpRight,
-  Cuboid,
-  Lock,
-  Sparkles,
-} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation, useParams } from "wouter";
+import { AnimatePresence, motion } from "framer-motion";
+import { Loader2, Menu, Share2, X } from "lucide-react";
+import { ApiError, useGetPublicTour } from "@workspace/api-client-react";
+import SparkViewer from "@/components/tour/SparkViewer";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
+import WVisionLogo from "@/components/WVisionLogo";
 
-interface PublicTourExtras {
+interface SceneExtra {
+  id: string;
+  label: string;
+  roomType: string;
+  generationStatus: "queued" | "processing" | "completed" | "failed";
+  generatedTourUrl: string | null;
+  worldEmbedUrl?: string | null;
+}
+
+interface TourRoom {
+  id: string;
+  roomLabel?: string | null;
+  floorNumber?: number | null;
+  worldEmbedUrl?: string | null;
+  marbleEmbedUrl?: string | null;
+  qualityScore?: number | null;
+  confidenceScore?: number | null;
+}
+
+interface PublicTourLike {
+  id?: string;
+  listingAddress?: string | null;
+  listingPlatform?: string | null;
+  status?: string | null;
+  generationStatus?: string | null;
+  isFullHouse?: boolean;
   generatedTourUrl?: string | null;
-  frozen?: boolean;
-  expiresAt?: string | null;
-  createdOnTier?: "free" | "pro" | "unlimited";
+  scenes?: SceneExtra[];
+  rooms?: TourRoom[];
+}
+
+interface ViewerRoom {
+  id: string;
+  label: string;
+  floor: number;
+  splatUrl: string | null;
+  ready: boolean;
+  rank: number;
+}
+
+function isSplatUrl(url: string | null | undefined): url is string {
+  if (!url) return false;
+  return /\.spz(\?|$)/i.test(url) || /\.rad(\?|$)/i.test(url);
 }
 
 export default function TourViewer() {
   const params = useParams();
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
   const shareToken = params.shareToken || "";
-  const { data: tour, isLoading } = useGetPublicTour(shareToken, { query: { enabled: !!shareToken, queryKey: ["public-tour", shareToken] } });
 
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [showConfidence, setShowConfidence] = useState(false);
+  const { data, isLoading, error } = useGetPublicTour(shareToken, {
+    query: {
+      enabled: !!shareToken,
+      queryKey: ["public-tour", shareToken],
+      refetchInterval: 4000,
+    },
+  });
+  const tour = (data ?? null) as PublicTourLike | null;
+
+  const rooms = useMemo<ViewerRoom[]>(() => {
+    if (!tour) return [];
+    if (tour.scenes && tour.scenes.length > 0) {
+      return tour.scenes
+        .map((s) => {
+        const splatUrl = s.generatedTourUrl ?? s.worldEmbedUrl ?? null;
+        return {
+          id: s.id,
+          label: s.label,
+          floor: 1,
+          splatUrl,
+          ready: s.generationStatus === "completed" && isSplatUrl(splatUrl),
+          rank:
+            s.generationStatus === "completed"
+              ? 200 + (s.generatedTourUrl ? 10 : 0)
+              : s.generationStatus === "processing"
+                ? 100
+                : 0,
+        };
+        })
+        .sort((a, b) => b.rank - a.rank);
+    }
+    return (tour.rooms ?? [])
+      .map((r) => {
+        const splatUrl = r.worldEmbedUrl ?? r.marbleEmbedUrl ?? null;
+        const quality = r.qualityScore ?? 0;
+        const confidence = r.confidenceScore ?? 0;
+        return {
+          id: r.id,
+          label: r.roomLabel ?? "Room",
+          floor: r.floorNumber ?? 1,
+          splatUrl,
+          ready: isSplatUrl(splatUrl),
+          rank: quality * 100 + confidence,
+        };
+      })
+      .sort((a, b) => b.rank - a.rank);
+  }, [tour]);
+
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
-  const [iframeError, setIframeError] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showLeadModal, setShowLeadModal] = useState(false);
+  const [leadLoading, setLeadLoading] = useState(false);
+  const [leadSuccess, setLeadSuccess] = useState(false);
+  const [showHint, setShowHint] = useState(true);
+  const [hintDismissedByClick, setHintDismissedByClick] = useState(false);
+  const [leadForm, setLeadForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    message: "",
+  });
 
-  if (isLoading) return (
-    <div className="fixed inset-0 bg-background flex items-center justify-center">
-      <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-    </div>
-  );
-  if (!tour) return (
-    <div className="fixed inset-0 bg-background flex items-center justify-center text-xl text-muted-foreground">
-      Tour not found.
-    </div>
-  );
+  const activeRoom =
+    rooms.find((r) => r.id === activeRoomId) ??
+    rooms.find((r) => r.ready) ??
+    rooms[0] ??
+    null;
 
-  const extras = tour as unknown as PublicTourExtras;
-  const frozen = !!extras.frozen;
-  const worldUrl = extras.generatedTourUrl ?? null;
-  const currentRoom = activeRoomId ? tour.rooms.find(r => r.id === activeRoomId) : tour.rooms[0];
-  // Prefer the whole-world Marble URL; fall back to per-room embed for legacy tours.
-  const marbleUrl = !frozen && (worldUrl || currentRoom?.marbleEmbedUrl);
-  const thumbnailUrl = currentRoom?.thumbnailUrl ?? tour.thumbnailUrl ?? null;
-  const useIframe = !!marbleUrl && !iframeError;
+  const fallbackSplat = tour?.generatedTourUrl ?? null;
+  const splatUrl = activeRoom?.splatUrl ?? fallbackSplat ?? null;
+
+  const isFullHouse =
+    Boolean(tour?.isFullHouse) ||
+    rooms.length > 1 ||
+    (tour?.scenes?.length ?? 0) > 1;
+  const showSidebarMenu = isFullHouse && rooms.length > 1;
+
+  const floors = useMemo(() => {
+    const grouped = new Map<number, ViewerRoom[]>();
+    for (const room of rooms) {
+      const list = grouped.get(room.floor) ?? [];
+      list.push(room);
+      grouped.set(room.floor, list);
+    }
+    return [...grouped.entries()].sort((a, b) => a[0] - b[0]);
+  }, [rooms]);
+
+  useEffect(() => {
+    if (activeRoomId) return;
+    const firstReady = rooms.find((r) => r.ready);
+    if (firstReady) setActiveRoomId(firstReady.id);
+  }, [rooms, activeRoomId]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (!hintDismissedByClick) setShowHint(false);
+    }, 4000);
+    return () => window.clearTimeout(timer);
+  }, [hintDismissedByClick]);
+
+  useEffect(() => {
+    const dismissHint = () => {
+      setHintDismissedByClick(true);
+      setShowHint(false);
+    };
+    window.addEventListener("click", dismissHint, { once: true });
+    return () => window.removeEventListener("click", dismissHint);
+  }, []);
+
+  async function handleShare() {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      toast({ title: "Link copied!" });
+    } catch {
+      toast({
+        title: "Could not copy link",
+        description: "Copy the URL from your address bar instead.",
+        variant: "destructive",
+      });
+    }
+  }
+
+  async function handleLeadSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!tour?.id) {
+      toast({ title: "Tour id missing", variant: "destructive" });
+      return;
+    }
+    if (!leadForm.name.trim() || !leadForm.email.trim()) {
+      toast({
+        title: "Name and email are required.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLeadLoading(true);
+    try {
+      const res = await fetch("/api/tours/lead", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tour_id: tour.id,
+          name: leadForm.name.trim(),
+          email: leadForm.email.trim(),
+          phone: leadForm.phone.trim() || undefined,
+          message: leadForm.message.trim() || undefined,
+        }),
+      });
+
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
+
+      setLeadSuccess(true);
+      toast({
+        title: "Request sent!",
+        description: "The agent will contact you shortly.",
+      });
+      window.setTimeout(() => {
+        setShowLeadModal(false);
+        setLeadSuccess(false);
+        setLeadForm({ name: "", email: "", phone: "", message: "" });
+      }, 2000);
+    } catch (err) {
+      toast({
+        title: "Could not send request",
+        description: err instanceof Error ? err.message : "Try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLeadLoading(false);
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="fixed inset-0 bg-[#080808] flex items-center justify-center text-white">
+        <div className="flex items-center gap-3 text-sm text-white/70">
+          <Loader2 className="w-5 h-5 animate-spin" />
+          Loading tour...
+        </div>
+      </div>
+    );
+  }
+
+  if (!tour) {
+    const apiErr = error as ApiError<{ code?: string; message?: string } | null> | null;
+    const frozen =
+      apiErr?.status === 410 ||
+      (typeof apiErr?.data === "object" && apiErr?.data?.code === "TOUR_FROZEN");
+    if (frozen) {
+      return (
+        <div className="fixed inset-0 bg-[#080808] flex items-center justify-center text-white">
+          <div className="text-center max-w-md px-6">
+            <div className="text-3xl font-semibold tracking-tight mb-2">
+              WVISION
+            </div>
+            <p className="text-white/90 text-lg font-medium">This tour is frozen.</p>
+            <p className="text-white/60 mt-2 text-sm">
+              Free tours are available for 24 hours, then automatically frozen.
+            </p>
+            <Button
+              className="mt-5 bg-white text-black hover:bg-white/90"
+              onClick={() => setLocation("/")}
+            >
+              Back home
+            </Button>
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div className="fixed inset-0 bg-[#080808] flex items-center justify-center text-white">
+        <div className="text-center">
+          <div className="text-3xl font-semibold tracking-tight mb-2">
+            WVISION
+          </div>
+          <p className="text-white/60">Tour not found.</p>
+          <Button
+            className="mt-4 bg-white text-black hover:bg-white/90"
+            onClick={() => setLocation("/")}
+          >
+            Back home
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const generating =
+    !splatUrl ||
+    tour.status === "processing" ||
+    tour.generationStatus === "processing" ||
+    tour.generationStatus === "queued";
 
   return (
-    <div className="fixed inset-0 bg-black overflow-hidden font-sans text-foreground">
-      {/* Background Layer: thumbnail or iframe */}
+    <div className="fixed inset-0 bg-[#080808] text-white overflow-hidden">
       <div className="absolute inset-0 z-0">
-        <AnimatePresence mode="wait">
-          {useIframe ? (
-            <iframe
-              key={`iframe-${worldUrl ?? currentRoom?.id}`}
-              src={marbleUrl}
-              className="w-full h-full border-none"
-              allow="xr-spatial-tracking; gyroscope; accelerometer"
-              allowFullScreen
-              onError={() => setIframeError(true)}
-            />
-          ) : thumbnailUrl ? (
-            <motion.div
-              key={`thumb-${currentRoom?.id}`}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.4 }}
-              className="w-full h-full relative"
-            >
-              <img
-                src={thumbnailUrl}
-                alt={currentRoom?.roomLabel ?? "Room"}
-                className="w-full h-full object-cover"
-              />
-              {/* Dark vignette overlay */}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/40" />
-              {/* 3D engine placeholder badge */}
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="bg-background/60 backdrop-blur-md border border-border/60 rounded-2xl px-6 py-4 flex flex-col items-center gap-2 shadow-2xl">
-                  <Cuboid className="w-8 h-8 text-primary/70 animate-pulse" />
-                  <span className="font-mono text-xs text-muted-foreground">3D generation engine</span>
-                  <span className="font-mono text-xs text-primary/60">Spatial AI is rendering your tour...</span>
-                </div>
-              </div>
-            </motion.div>
-          ) : (
-            <motion.div
-              key="empty"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="w-full h-full bg-card flex items-center justify-center"
-            >
-              <div className="flex flex-col items-center gap-3 text-muted-foreground">
-                <Cuboid className="w-12 h-12 text-primary/40 animate-pulse" />
-                <span className="font-mono text-sm">No preview available</span>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Frozen-tour overlay (free tier expired) */}
-        {frozen && (
-          <div className="absolute inset-0 z-30 bg-black/85 backdrop-blur-md flex items-center justify-center px-6">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.96 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="max-w-md w-full bg-card border-2 border-foreground shadow-[8px_8px_0px_0px_#1A1714] overflow-hidden"
-            >
-              <div className="flex items-center gap-2 px-4 py-2.5 border-b-2 border-foreground bg-foreground">
-                <span className="w-2 h-2 bg-primary" />
-                <span className="text-xs font-mono font-bold uppercase tracking-widest text-background">
-                  Tour Frozen
-                </span>
-              </div>
-              <div className="p-6 text-center">
-                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-primary/10 border-2 border-primary flex items-center justify-center">
-                  <Lock className="w-7 h-7 text-primary" />
-                </div>
-                <h2 className="text-2xl font-serif mb-2">THIS TOUR IS FROZEN</h2>
-                <p className="text-sm text-muted-foreground mb-1">
-                  Free-tier tours stay live for 24&nbsp;hours. After that the
-                  3D world is locked until the owner upgrades.
-                </p>
-                {extras.expiresAt && (
-                  <p className="text-xs text-muted-foreground/70 font-mono mb-5">
-                    Expired{" "}
-                    {new Date(extras.expiresAt).toLocaleString(undefined, {
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                    })}
-                  </p>
-                )}
-                <div className="space-y-2">
-                  <Button
-                    className="w-full bg-primary text-primary-foreground font-bold"
-                    onClick={() => setLocation("/dashboard/billing")}
-                  >
-                    <Sparkles className="w-4 h-4 mr-2" />
-                    Upgrade to Unfreeze
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => setLocation("/dashboard")}
-                  >
-                    Back to Dashboard
-                  </Button>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-
-        {/* Confidence overlay */}
-        {showConfidence && !frozen && (
-          <div className="absolute inset-0 pointer-events-none">
-            <div className="absolute top-1/4 left-1/4 w-32 h-32 bg-primary/20 border border-primary/50 rounded-full blur-sm flex items-center justify-center font-mono text-primary text-xs">Real Photo</div>
-            <div className="absolute bottom-1/4 right-1/4 w-48 h-48 bg-blue-500/20 border border-blue-500/50 rounded-full blur-sm flex items-center justify-center font-mono text-blue-400 text-xs">AI High Conf</div>
+        {!generating ? (
+          <SparkViewer splatUrl={splatUrl} />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <div className="flex flex-col items-center gap-3 rounded-xl bg-black/50 border border-white/10 px-6 py-5">
+              <Loader2 className="w-6 h-6 animate-spin text-white/80" />
+              <p className="text-sm text-white/70">
+                Tour is still being generated
+              </p>
+            </div>
           </div>
         )}
       </div>
 
-      {/* Floating UI */}
-      <div className="absolute inset-0 pointer-events-none z-10 flex flex-col justify-between">
-        {/* Top Bar */}
-        <div className="p-4 flex justify-between items-start pointer-events-auto">
-          <div className="flex items-center gap-3">
-            {/* Hamburger button — fixed top-left, dark bg, green on hover */}
+      <div className="fixed top-0 left-0 right-0 z-30 h-14 bg-[rgba(8,8,8,0.8)] backdrop-blur-xl border-b border-[#222222] flex items-center justify-between px-4">
+        <div className="flex items-center gap-3">
+          {showSidebarMenu && (
             <button
               onClick={() => setSidebarOpen(true)}
-              className="w-10 h-10 flex items-center justify-center rounded-lg bg-black/80 backdrop-blur-md border border-white/10 text-white hover:text-primary hover:border-primary/50 transition-all duration-200 shadow-lg"
-              aria-label="Open rooms"
+              className="h-8 w-8 rounded-md border border-white/15 bg-white/5 hover:bg-white/10 flex items-center justify-center"
+              aria-label="Open room list"
             >
-              <Menu className="w-5 h-5" />
+              <Menu className="w-4 h-4" />
             </button>
-            <div className="bg-black/70 backdrop-blur-md border border-white/10 rounded-lg px-4 py-2 flex flex-col shadow-lg">
-              <span className="font-serif font-bold text-sm tracking-tight flex items-center gap-2 text-white">
-                {tour.listingAddress} <ArrowUpRight className="w-3 h-3 text-white/40" />
-              </span>
-              <span className="text-xs text-white/50 font-mono">{currentRoom?.roomLabel ?? "Room"}</span>
-            </div>
-          </div>
-
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              className="bg-black/70 backdrop-blur-md border-white/10 text-white font-medium hover:border-primary/50 hover:text-primary"
-              onClick={() => {
-                navigator.clipboard.writeText(window.location.href);
-              }}
-            >
-              <Share2 className="w-4 h-4 mr-2" /> Share
-            </Button>
-            <Button className="bg-primary text-black font-bold glow-primary hover:bg-primary/90">
-              Request Visit
-            </Button>
-          </div>
+          )}
+          <WVisionLogo className="h-6 w-auto object-contain" />
         </div>
-
-        {/* Bottom Bar */}
-        <div className="p-4 flex justify-between items-end pointer-events-auto">
-          <div className="bg-black/50 backdrop-blur border border-white/10 px-3 py-1.5 rounded text-xs font-serif font-bold text-white/60 flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-primary/60" /> WVISION
-          </div>
-
-          <div className="bg-black/70 backdrop-blur-md border border-white/10 p-3 rounded-xl flex items-center gap-4">
-            <div className="flex flex-col">
-              <Label className="font-bold text-sm text-white">AI Confidence Layer</Label>
-              <span className="text-xs text-white/50 font-mono">{tour.confidenceScore}% avg</span>
-            </div>
-            <Switch checked={showConfidence} onCheckedChange={setShowConfidence} />
-          </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleShare}
+            className="h-8 px-3 rounded-md border border-white/20 text-xs text-white/85 hover:bg-white/10 inline-flex items-center gap-1.5"
+          >
+            <Share2 className="w-3.5 h-3.5" />
+            Share
+          </button>
+          <button
+            onClick={() => setShowLeadModal(true)}
+            className="h-8 px-3 rounded-md text-xs bg-blue-600 hover:bg-blue-500 text-white"
+          >
+            Request a Visit
+          </button>
         </div>
       </div>
 
-      {/* Room Sidebar — slides from left, 300ms, rgba(8,8,8,0.95) + blur */}
       <AnimatePresence>
-        {sidebarOpen && (
+        {showSidebarMenu && sidebarOpen && (
           <>
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="absolute inset-0 bg-black/50 backdrop-blur-sm z-40"
+              className="fixed inset-0 z-40 bg-black/45"
               onClick={() => setSidebarOpen(false)}
             />
-            <motion.div
-              initial={{ x: "-100%" }}
+            <motion.aside
+              initial={{ x: -280 }}
               animate={{ x: 0 }}
-              exit={{ x: "-100%" }}
-              transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
-              style={{ backgroundColor: "rgba(8,8,8,0.95)" }}
-              className="absolute top-0 left-0 bottom-0 w-full sm:w-[280px] border-r border-white/10 z-50 flex flex-col backdrop-blur-xl"
+              exit={{ x: -280 }}
+              transition={{ duration: 0.22 }}
+              className="fixed top-14 left-0 bottom-0 z-50 w-[260px] bg-[rgba(8,8,8,0.97)] backdrop-blur-2xl border-r border-white/10 overflow-y-auto"
             >
-              {/* Sidebar header */}
-              <div className="p-4 border-b border-white/10 flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-primary" />
-                  <span className="font-serif font-bold tracking-tight text-white">Rooms</span>
-                  <span className="font-mono text-xs text-white/30 ml-1">({tour.rooms.length})</span>
-                </div>
+              <div className="px-4 py-4 border-b border-white/10">
+                <p className="text-[11px] uppercase tracking-wider text-white/45">
+                  Property
+                </p>
+                <p className="text-sm mt-1 leading-snug">{tour.listingAddress}</p>
+              </div>
+              <div className="px-2 py-2">
+                {floors.map(([floor, list]) => (
+                  <div key={floor} className="mb-3">
+                    <p className="px-2 py-1 text-[11px] uppercase tracking-wider text-white/40">
+                      Floor {floor}
+                    </p>
+                    {list.map((room) => {
+                      const active = activeRoom?.id === room.id;
+                      return (
+                        <button
+                          key={room.id}
+                          onClick={() => {
+                            setActiveRoomId(room.id);
+                            setSidebarOpen(false);
+                          }}
+                          className={`w-full text-left px-2.5 py-2 rounded-md text-sm flex items-center gap-2 border-l-2 ${
+                            active
+                              ? "bg-blue-600/15 border-blue-500"
+                              : "border-transparent hover:bg-white/5"
+                          }`}
+                        >
+                          <span
+                            className={`h-2.5 w-2.5 rounded-full ${
+                              room.ready ? "bg-blue-500" : "bg-zinc-500"
+                            }`}
+                          />
+                          <span className="truncate">{room.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showLeadModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] bg-black/55 flex items-center justify-center px-4"
+            onClick={() => !leadLoading && setShowLeadModal(false)}
+          >
+            <motion.form
+              initial={{ opacity: 0, y: 12, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 12, scale: 0.98 }}
+              onSubmit={handleLeadSubmit}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-md rounded-2xl bg-white text-black p-5 shadow-2xl"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-lg font-semibold">Interested in this property?</h2>
                 <button
-                  onClick={() => setSidebarOpen(false)}
-                  className="w-8 h-8 flex items-center justify-center rounded-md text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+                  type="button"
+                  onClick={() => !leadLoading && setShowLeadModal(false)}
+                  className="h-7 w-7 rounded-md hover:bg-black/5 flex items-center justify-center"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
-
-              {/* Listing info */}
-              <div className="px-4 py-3 border-b border-white/5">
-                <p className="text-xs font-mono text-white/40 uppercase tracking-wider mb-1">Property</p>
-                <p className="text-sm font-bold text-white leading-tight">{tour.listingAddress}</p>
-                <div className="flex items-center gap-3 mt-1.5 text-xs text-white/40 font-mono">
-                  {tour.listingBedrooms && <span>{tour.listingBedrooms}bd</span>}
-                  {tour.listingBathrooms && <span>{tour.listingBathrooms}ba</span>}
-                  {tour.listingPrice && <span className="text-primary/80">{tour.listingPrice}</span>}
-                </div>
+              <div className="space-y-3">
+                <input
+                  type="text"
+                  placeholder="Full name *"
+                  required
+                  value={leadForm.name}
+                  onChange={(e) =>
+                    setLeadForm((f) => ({ ...f, name: e.target.value }))
+                  }
+                  className="w-full h-10 rounded-md border border-zinc-300 px-3 text-sm"
+                />
+                <input
+                  type="email"
+                  placeholder="Email *"
+                  required
+                  value={leadForm.email}
+                  onChange={(e) =>
+                    setLeadForm((f) => ({ ...f, email: e.target.value }))
+                  }
+                  className="w-full h-10 rounded-md border border-zinc-300 px-3 text-sm"
+                />
+                <input
+                  type="tel"
+                  placeholder="Phone number (optional)"
+                  value={leadForm.phone}
+                  onChange={(e) =>
+                    setLeadForm((f) => ({ ...f, phone: e.target.value }))
+                  }
+                  className="w-full h-10 rounded-md border border-zinc-300 px-3 text-sm"
+                />
+                <textarea
+                  placeholder="Message (optional)"
+                  value={leadForm.message}
+                  onChange={(e) =>
+                    setLeadForm((f) => ({ ...f, message: e.target.value }))
+                  }
+                  className="w-full min-h-24 rounded-md border border-zinc-300 px-3 py-2 text-sm resize-none"
+                />
               </div>
 
-              {/* Room list */}
-              <div className="overflow-y-auto flex-1 p-2 space-y-0.5">
-                {tour.rooms.map(room => {
-                  const isActive = activeRoomId === room.id || (!activeRoomId && room.id === tour.rooms[0]?.id);
-                  return (
-                    <button
-                      key={room.id}
-                      onClick={() => { setActiveRoomId(room.id); setSidebarOpen(false); }}
-                      className={`w-full text-left px-3 py-3 rounded-lg flex items-center gap-3 transition-all duration-150 ${
-                        isActive
-                          ? "bg-primary/15 border border-primary/30 text-primary"
-                          : "text-white/60 hover:text-white hover:bg-white/5 border border-transparent"
-                      }`}
-                    >
-                      {room.thumbnailUrl && (
-                        <img
-                          src={room.thumbnailUrl}
-                          alt=""
-                          className="w-10 h-10 rounded object-cover flex-shrink-0 border border-white/10"
-                        />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <span className="font-medium text-sm block truncate">{room.roomLabel}</span>
-                        <span className="text-xs opacity-50 font-mono">Floor {room.floorNumber}</span>
-                      </div>
-                      {room.confidenceScore && room.confidenceScore > 0.9 ? (
-                        <CheckCircle2 className="w-4 h-4 text-primary flex-shrink-0" />
-                      ) : (
-                        <AlertTriangle className="w-4 h-4 text-yellow-500/70 flex-shrink-0" />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
+              <button
+                type="submit"
+                disabled={leadLoading || leadSuccess}
+                className="mt-4 h-10 w-full rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-500 disabled:opacity-60"
+              >
+                {leadLoading
+                  ? "Sending..."
+                  : leadSuccess
+                  ? "Request sent!"
+                  : "Send Request"}
+              </button>
+              {leadSuccess && (
+                <p className="mt-2 text-xs text-zinc-600 text-center">
+                  Request sent! The agent will contact you shortly.
+                </p>
+              )}
+            </motion.form>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-              {/* Agent footer */}
-              <div className="p-4 border-t border-white/10">
-                <p className="text-xs font-mono text-white/30 uppercase tracking-wider mb-2">Listing Agent</p>
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center flex-shrink-0">
-                    {tour.agentLogo
-                      ? <img src={tour.agentLogo} alt="" className="w-full h-full object-cover rounded-full" />
-                      : <span className="text-primary font-bold text-xs">{(tour.agentName || "A")[0]}</span>
-                    }
-                  </div>
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-sm font-bold text-white truncate">{tour.agentName ?? "Listing Agent"}</span>
-                    <span className="text-xs text-white/40 font-mono capitalize">{tour.listingPlatform}</span>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          </>
+      <AnimatePresence>
+        {showHint && !generating && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            className="fixed z-20 left-1/2 -translate-x-1/2 bottom-6 bg-black/65 border border-white/15 rounded-full px-4 py-2 text-xs text-white/90 pointer-events-none text-center"
+          >
+            Click to explore · WASD to move · Mouse to look around
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

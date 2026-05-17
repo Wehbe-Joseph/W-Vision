@@ -3,6 +3,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { Chrome, Lock, Mail, MailCheck, UserRound } from "lucide-react";
+import WVisionLogo from "@/components/WVisionLogo";
 
 export function AuthPage({ mode }: { mode: "login" | "signup" }) {
   const {
@@ -100,11 +101,34 @@ export function AuthPage({ mode }: { mode: "login" | "signup" }) {
                 className="absolute w-44 h-44 border-2 border-dashed border-primary/40"
               />
               <motion.div
-                animate={{ y: [0, -6, 0], rotateY: [0, 8, 0] }}
-                transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
-                className="w-28 h-28 border-2 border-foreground bg-card flex items-center justify-center"
+                animate={{
+                  y: [0, -7, 0],
+                  rotateY: [0, 18, -18, 0],
+                  rotateX: [0, 7, -7, 0],
+                }}
+                transition={{ repeat: Infinity, duration: 6, ease: "easeInOut" }}
+                className="relative w-40 h-40 border-2 border-foreground bg-card flex items-center justify-center [transform-style:preserve-3d]"
               >
-                <span className="text-4xl font-serif">3D</span>
+                {[
+                  { top: "-8px", left: "-8px", delay: 0 },
+                  { top: "-8px", right: "-8px", delay: 0.35 },
+                  { bottom: "-8px", left: "-8px", delay: 0.7 },
+                  { bottom: "-8px", right: "-8px", delay: 1.05 },
+                ].map((dot, i) => (
+                  <motion.span
+                    key={i}
+                    className="absolute w-3 h-3 rounded-full bg-primary"
+                    style={dot}
+                    animate={{ scale: [1, 1.65, 1], opacity: [0.45, 1, 0.45] }}
+                    transition={{
+                      repeat: Infinity,
+                      duration: 1.8,
+                      ease: "easeInOut",
+                      delay: dot.delay,
+                    }}
+                  />
+                ))}
+                <WVisionLogo className="w-20 h-20 object-contain drop-shadow-[0_6px_10px_rgba(0,0,0,0.15)]" />
               </motion.div>
             </div>
           </div>

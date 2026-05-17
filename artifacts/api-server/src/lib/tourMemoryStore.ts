@@ -13,6 +13,31 @@
 
 export type MemGenerationStatus = "queued" | "processing" | "completed" | "failed";
 
+/**
+ * One walkable 3D space within a tour — typically a single room from the
+ * listing (Living Room, Master Bedroom, …). Each scene maps to one Marble
+ * world generation, so the sidebar in the viewer can switch between rooms.
+ */
+export interface MemScene {
+  id: string;
+  label: string;
+  roomType: string;
+  thumbnailUrl: string;
+  imageUrls: string[];
+  operationId: string | null;
+  worldId: string | null;
+  generationStatus: MemGenerationStatus;
+  generatedTourUrl: string | null;
+  errorMessage: string | null;
+  /**
+   * True when this scene has been classified but Marble generation was
+   * deliberately deferred (free tier only gets one world). Once the user
+   * upgrades, `/api/generate-tour/:tourId/resume` flips this off and kicks
+   * off the Marble call for the room.
+   */
+  locked: boolean;
+}
+
 export interface MemTour {
   tourId: string;
   userId: string;
@@ -38,6 +63,8 @@ export interface MemTour {
   frozen: boolean;
   /** Tier at the time the tour was created — used to render the upgrade CTA. */
   createdOnTier: "free" | "pro" | "unlimited";
+  /** One Marble world per room (filled after Gemini classification). */
+  scenes: MemScene[];
 }
 
 const TOURS = new Map<string, MemTour>();
@@ -80,6 +107,68 @@ export function updateMemTour(
 
 export function deleteMemTour(tourId: string): boolean {
   return TOURS.delete(tourId);
+}
+
+/** Patch a single scene inside a tour. */
+export function updateMemScene(
+  tourId: string,
+  sceneId: string,
+  patch: Partial<Omit<MemScene, "id">>,
+): MemScene | undefined {
+  const tour = TOURS.get(tourId);
+  if (!tour) return undefined;
+  const scene = tour.scenes.find((s) => s.id === sceneId);
+  if (!scene) return undefined;
+  Object.assign(scene, patch);
+  tour.updatedAt = Date.now();
+  return scene;
+}
+
+/** True when the URL points at a Gaussian splat asset Spark can load. */
+function isSpzAssetUrl(url: string | null | undefined): boolean {
+  return !!url && /\.spz(\?|$)/i.test(url);
+}
+
+/**
+ * Recompute the parent tour's overall generationStatus from its scenes.
+ *   - any FAILED + no in-flight  -> failed (only if no completed siblings)
+ *   - all COMPLETED              -> completed
+ *   - any PROCESSING             -> processing
+ *   - else                       -> queued
+ *
+ * We also bubble up the first completed scene's URL as the legacy
+ * `generatedTourUrl` so older clients keep working.
+ */
+export function rollupMemTourFromScenes(tourId: string): MemTour | undefined {
+  const tour = TOURS.get(tourId);
+  if (!tour || tour.scenes.length === 0) return tour;
+
+  // Locked scenes are intentionally deferred (free tier) — they should not
+  // block the parent tour from being marked complete.
+  const active = tour.scenes.filter((s) => !s.locked);
+  const statuses = (active.length > 0 ? active : tour.scenes).map(
+    (s) => s.generationStatus,
+  );
+  let next: MemGenerationStatus;
+  if (statuses.every((s) => s === "completed")) next = "completed";
+  else if (statuses.some((s) => s === "processing" || s === "queued"))
+    next = "processing";
+  else if (statuses.some((s) => s === "completed")) next = "completed";
+  else next = "failed";
+
+  tour.generationStatus = next;
+  if (next === "completed" && !tour.completedAt) tour.completedAt = Date.now();
+
+  const firstReady = tour.scenes.find(
+    (s) => s.generationStatus === "completed" && isSpzAssetUrl(s.generatedTourUrl),
+  );
+  if (firstReady) {
+    tour.generatedTourUrl = firstReady.generatedTourUrl;
+    tour.worldId = firstReady.worldId ?? tour.worldId;
+    tour.previewImageUrl = tour.previewImageUrl ?? firstReady.thumbnailUrl;
+  }
+  tour.updatedAt = Date.now();
+  return tour;
 }
 
 export function listMemToursForUser(

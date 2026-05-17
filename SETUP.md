@@ -10,11 +10,19 @@ Paste your **Postgres connection string** from Supabase Dashboard -> Project Set
 
 Prefer the **Transaction pooler** URL (IPv4, port 6543); the direct `db.<ref>.supabase.co` host is IPv6-only and often does not resolve on home networks.
 
-Example (replace `REGION` and `YOUR_DB_PASSWORD`):
+Example (copy the **exact** URI from the dashboard; do not guess the pool host — some projects use `aws-0-…`, others `aws-1-…`):
 
 ```
-DATABASE_URL=postgresql://postgres.gjpqtjqdmwwjxtsmwaf:YOUR_DB_PASSWORD@aws-0-REGION.pooler.supabase.com:6543/postgres?sslmode=require
+DATABASE_URL=postgresql://postgres.<project_ref>:YOUR_DB_PASSWORD@aws-0-<region>.pooler.supabase.com:6543/postgres?sslmode=require
 ```
+
+From the repo root you can start **API + tourvision** together:
+
+```bash
+pnpm dev
+```
+
+(Uses ports **8080** and **18992** by default. Stop any old dev servers first if you see “port already in use”.)
 
 `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` are already populated.
 

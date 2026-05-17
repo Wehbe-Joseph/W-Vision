@@ -24,10 +24,11 @@ import {
   memTotalViewsForUser,
   findMemTourByShareToken,
   refreshTourExpiry,
-  unfreezeAllToursForUser,
   type MemTour,
+  type MemScene,
 } from "../lib/tourMemoryStore";
-import { getMemUser, isPaidTier } from "../lib/userMemoryStore";
+import { mapDbScenesToPublicLike } from "../lib/tourScenesPersistence";
+import { FREE_TIER_TTL_MS } from "../lib/userMemoryStore";
 
 const router = Router();
 
@@ -133,6 +134,37 @@ function mapTour(t: typeof toursTable.$inferSelect) {
   };
 }
 
+function mapPublicScene(s: MemScene) {
+  return {
+    id: s.id,
+    label: s.label,
+    roomType: s.roomType,
+    thumbnailUrl: s.thumbnailUrl,
+    imageCount: s.imageUrls.length,
+    generationStatus: s.generationStatus,
+    generatedTourUrl: s.generatedTourUrl,
+    worldEmbedUrl: s.generatedTourUrl,
+    worldId: s.worldId,
+    locked: s.locked,
+  };
+}
+
+/** Scenes for share link once memory is gone — read from Postgres JSON. */
+function mapDbStoredScenesToPublic(raw: unknown) {
+  return mapDbScenesToPublicLike(raw).map((s) => ({
+    id: s.id,
+    label: s.label,
+    roomType: s.roomType,
+    thumbnailUrl: s.thumbnailUrl,
+    imageCount: s.imageCount,
+    generationStatus: s.generationStatus,
+    generatedTourUrl: s.generatedTourUrl,
+    worldEmbedUrl: s.generatedTourUrl,
+    worldId: s.worldId,
+    locked: s.locked,
+  }));
+}
+
 function mapRoom(p: typeof tourPhotosTable.$inferSelect) {
   return {
     id: p.id,
@@ -144,7 +176,8 @@ function mapRoom(p: typeof tourPhotosTable.$inferSelect) {
     isBestForRoom: p.isBestForRoom,
     confidenceScore: p.confidenceScore,
     marbleWorldId: p.marbleWorldId,
-    marbleEmbedUrl: p.marbleEmbedUrl,
+    marbleEmbedUrl: null,
+    worldEmbedUrl: p.worldEmbedUrl ?? null,
     thumbnailUrl: p.thumbnailUrl,
     isAiGenerated: p.isAiGenerated,
     createdAt: p.createdAt.toISOString(),
@@ -167,7 +200,11 @@ router.post("/tours", async (req, res) => {
     if (profile) {
       const tier = profile.subscriptionTier || "free";
       const limit = TOUR_LIMITS[tier] ?? 1;
-      if (profile.toursThisMonth >= limit) {
+      const used =
+        tier === "free"
+          ? profile.totalTours ?? profile.toursThisMonth
+          : profile.toursThisMonth;
+      if (used >= limit) {
         return res.status(403).json({
           error: `Tour limit reached. Upgrade to generate more tours.`,
           code: "LIMIT_REACHED",
@@ -585,6 +622,7 @@ router.put("/tours/:tourId/floors", async (req, res) => {
 // GET /tours/public/:shareToken — public, no auth
 router.get("/tours/public/:shareToken", async (req, res) => {
   try {
+    const now = Date.now();
     let tour: typeof toursTable.$inferSelect | undefined;
     try {
       tour = await db.query.toursTable.findFirst({
@@ -602,7 +640,17 @@ router.get("/tours/public/:shareToken", async (req, res) => {
       const mem = findMemTourByShareToken(req.params.shareToken);
       if (mem) {
         refreshTourExpiry(mem);
-        if (!mem.frozen) mem.viewCount += 1;
+        if (mem.frozen) {
+          return res.status(410).json({
+            error: "Tour is frozen",
+            code: "TOUR_FROZEN",
+            message:
+              "This tour is no longer accessible. Generate a new tour to continue.",
+            frozen: true,
+            expiresAt: mem.expiresAt ? new Date(mem.expiresAt).toISOString() : null,
+          });
+        }
+        mem.viewCount += 1;
         return res.json({
           id: mem.tourId,
           shareToken: mem.shareToken,
@@ -612,7 +660,7 @@ router.get("/tours/public/:shareToken", async (req, res) => {
           listingBedrooms: null,
           listingBathrooms: null,
           listingSqft: null,
-          marbleWorldIds: mem.frozen || !mem.worldId ? null : [mem.worldId],
+          marbleWorldIds: !mem.worldId ? null : [mem.worldId],
           rooms: [],
           confidenceScore: null,
           realAngles: null,
@@ -622,13 +670,72 @@ router.get("/tours/public/:shareToken", async (req, res) => {
           agentName: null,
           agentLogo: null,
           thumbnailUrl: mem.previewImageUrl,
-          generatedTourUrl: mem.frozen ? null : mem.generatedTourUrl,
-          frozen: mem.frozen,
+          generatedTourUrl: mem.generatedTourUrl,
+          generationStatus: mem.generationStatus,
+          frozen: false,
           expiresAt: mem.expiresAt ? new Date(mem.expiresAt).toISOString() : null,
           createdOnTier: mem.createdOnTier,
+          scenes: mem.scenes.map(mapPublicScene),
         });
       }
       return res.status(404).json({ error: "Tour not found" });
+    }
+
+    let rooms: (typeof tourPhotosTable.$inferSelect)[] = [];
+    try {
+      rooms = await db
+        .select()
+        .from(tourPhotosTable)
+        .where(
+          and(
+            eq(tourPhotosTable.tourId, tour.id),
+            eq(tourPhotosTable.isBestForRoom, true),
+          ),
+        )
+        .orderBy(
+          desc(tourPhotosTable.qualityScore),
+          desc(tourPhotosTable.confidenceScore),
+          asc(tourPhotosTable.floorNumber),
+        );
+    } catch (err) {
+      req.log.warn({ err }, "Failed to load rooms — returning empty list");
+    }
+
+    let agent: typeof profilesTable.$inferSelect | undefined;
+    try {
+      agent = await db.query.profilesTable.findFirst({
+        where: eq(profilesTable.id, tour.userId),
+      });
+    } catch {
+      // agent metadata is optional in the response
+    }
+
+    // Consult the memory mirror for tier / expiry / scenes — these aren't
+    // (yet) persisted to the DB schema.
+    const mem = findMemTourByShareToken(req.params.shareToken);
+    if (mem) refreshTourExpiry(mem);
+    const ownerTier = ((agent?.subscriptionTier as string | null) ?? "free").toLowerCase();
+    const dbDerivedExpiresAt =
+      mem?.expiresAt ??
+      (ownerTier === "free" ? tour.createdAt.getTime() + FREE_TIER_TTL_MS : null);
+    const frozen =
+      mem?.frozen ??
+      (dbDerivedExpiresAt !== null ? now >= dbDerivedExpiresAt : false);
+    const expiresAt =
+      dbDerivedExpiresAt !== null
+        ? new Date(dbDerivedExpiresAt).toISOString()
+        : null;
+    const createdOnTier = mem?.createdOnTier ?? (ownerTier || "free");
+
+    if (frozen) {
+      return res.status(410).json({
+        error: "Tour is frozen",
+        code: "TOUR_FROZEN",
+        message:
+          "This tour is no longer accessible. Generate a new tour to continue.",
+        frozen: true,
+        expiresAt,
+      });
     }
 
     try {
@@ -650,40 +757,16 @@ router.get("/tours/public/:shareToken", async (req, res) => {
       req.log.warn({ err }, "Failed to increment view counters");
     }
 
-    let rooms: (typeof tourPhotosTable.$inferSelect)[] = [];
-    try {
-      rooms = await db
-        .select()
-        .from(tourPhotosTable)
-        .where(
-          and(
-            eq(tourPhotosTable.tourId, tour.id),
-            eq(tourPhotosTable.isBestForRoom, true),
-          ),
-        )
-        .orderBy(asc(tourPhotosTable.floorNumber));
-    } catch (err) {
-      req.log.warn({ err }, "Failed to load rooms — returning empty list");
-    }
-
-    let agent: typeof profilesTable.$inferSelect | undefined;
-    try {
-      agent = await db.query.profilesTable.findFirst({
-        where: eq(profilesTable.id, tour.userId),
-      });
-    } catch {
-      // agent metadata is optional in the response
-    }
-
-    // Consult the memory mirror for tier / expiry — these aren't (yet)
-    // persisted to the DB schema.
-    const mem = findMemTourByShareToken(req.params.shareToken);
-    if (mem) refreshTourExpiry(mem);
-    const frozen = mem?.frozen ?? false;
-    const expiresAt = mem?.expiresAt
-      ? new Date(mem.expiresAt).toISOString()
-      : null;
-    const createdOnTier = mem?.createdOnTier ?? "free";
+    const resolvedScenes = !frozen
+      ? mem && mem.scenes.length > 0
+        ? mem.scenes.map(mapPublicScene)
+        : mapDbStoredScenesToPublic(tour.generationScenes)
+      : [];
+    const firstSceneEmbed =
+      resolvedScenes.find(
+        (x) => x.generationStatus === "completed" && x.generatedTourUrl,
+      )?.generatedTourUrl ?? null;
+    const firstPhotoSplat = rooms.find((r) => r.worldEmbedUrl)?.worldEmbedUrl ?? null;
 
     return res.json({
       id: tour.id,
@@ -704,10 +787,18 @@ router.get("/tours/public/:shareToken", async (req, res) => {
       agentName: agent?.fullName ?? null,
       agentLogo: agent?.avatarUrl ?? null,
       thumbnailUrl: tour.thumbnailUrl,
-      generatedTourUrl: frozen ? null : tour.generatedTourUrl,
+      generatedTourUrl:
+        frozen
+          ? null
+          : mem?.generatedTourUrl ??
+            tour.generatedTourUrl ??
+            firstSceneEmbed ??
+            firstPhotoSplat,
+      generationStatus: mem?.generationStatus ?? tour.generationStatus,
       frozen,
       expiresAt,
       createdOnTier,
+      scenes: resolvedScenes,
     });
   } catch (err) {
     req.log.error(err);

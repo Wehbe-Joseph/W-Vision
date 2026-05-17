@@ -9,6 +9,8 @@ import analyticsRouter from "./analytics";
 import flagsRouter from "./flags";
 import imagesRouter from "./images";
 import emailRouter from "./email";
+import scrapeListingRouter from "./scrape-listing";
+import classifyListingRouter from "./classify-listing";
 
 const router: IRouter = Router();
 
@@ -22,5 +24,7 @@ router.use(analyticsRouter);
 router.use(flagsRouter);
 router.use(imagesRouter);
 router.use(emailRouter);
+router.use(scrapeListingRouter);
+router.use(classifyListingRouter);
 
 export default router;

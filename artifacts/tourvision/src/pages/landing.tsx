@@ -530,42 +530,53 @@ export default function Landing() {
               <span className="w-2.5 h-2.5 bg-primary" />
               <span className="text-xs font-mono font-bold uppercase tracking-widest">Pricing</span>
             </div>
-            <h2 className="text-5xl md:text-6xl font-serif">SIMPLE PLANS</h2>
+            <h2 className="text-5xl md:text-6xl font-serif">FOUNDING LAUNCH OFFER</h2>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-6">
-            {[
-              { name: "Free", price: "$0", features: ["1 3D tour per month", "Watermarked", "Shareable link"], variant: "outline" as const },
-              { name: "Pro", price: "$29", features: ["15 tours per month", "No watermark", "Analytics dashboard", "Priority processing"], variant: "default" as const, featured: true },
-              { name: "Unlimited", price: "$79", features: ["Unlimited tours", "White-label", "API access", "Dedicated support"], variant: "yellow" as const },
-            ].map(({ name, price, features, variant, featured }) => (
-              <div
-                key={name}
-                className={`border-2 border-foreground flex flex-col ${featured ? "shadow-[8px_8px_0px_0px_#1A1714] bg-foreground text-background" : "bg-card"}`}
-              >
-                {/* Title bar */}
-                <div className={`flex items-center gap-2 px-4 py-2 border-b-2 ${featured ? "border-background/20" : "border-foreground"}`}>
-                  <span className="text-xs font-mono font-bold uppercase tracking-widest opacity-70">{name}</span>
-                </div>
-                <div className="p-6 flex flex-col gap-6 flex-1">
-                  <div className="text-5xl font-serif">{price}<span className="text-xl opacity-50">/mo</span></div>
-                  <ul className="space-y-2.5 flex-1">
-                    {features.map((f) => (
-                      <li key={f} className={`flex items-center gap-2 text-sm ${featured ? "opacity-80" : "text-muted-foreground"}`}>
-                        <CheckCircle2 className="w-4 h-4 shrink-0" /> {f}
-                      </li>
-                    ))}
-                  </ul>
-                  <Button
-                    variant={featured ? "outline" : variant}
-                    className={`w-full ${featured ? "bg-background text-foreground border-background" : ""}`}
-                    onClick={handleCreate}
-                  >
-                    Get Started <ArrowRight className="w-4 h-4 ml-1" />
-                  </Button>
-                </div>
+          <div className="max-w-3xl border-2 border-foreground bg-card shadow-[8px_8px_0px_0px_#1A1714]">
+            <div className="flex items-center gap-2 px-4 py-2 border-b-2 border-foreground bg-foreground text-background">
+              <span className="w-2 h-2 bg-primary" />
+              <span className="text-xs font-mono font-bold uppercase tracking-widest">
+                Founding Launch Offer - $59 upfront
+              </span>
+            </div>
+            <div className="p-7 flex flex-col gap-6">
+              <div>
+                <div className="text-6xl font-serif">$59</div>
+                <p className="text-sm text-muted-foreground mt-2">
+                  Full immersive AI-generated property walkthroughs.
+                </p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  First month free, then $13/month.
+                </p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Or pay $100/year.
+                </p>
               </div>
-            ))}
+              <ul className="space-y-2.5">
+                {[
+                  "Full property immersive walkthrough",
+                  "All rooms",
+                  "Hosted shareable tour",
+                  "Room navigation",
+                  "Premium property page",
+                ].map((feature) => (
+                  <li key={feature} className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-primary" />
+                    {feature}
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
+                Early access pricing available during beta launch.
+              </p>
+              <Button className="w-full md:w-auto" onClick={handleCreate}>
+                Pay $59 - First Month Free <ArrowRight className="w-4 h-4 ml-1" />
+              </Button>
+              <Button variant="outline" className="w-full md:w-auto" onClick={handleCreate}>
+                Choose $100/Year <ArrowRight className="w-4 h-4 ml-1" />
+              </Button>
+            </div>
           </div>
         </section>
       </main>
