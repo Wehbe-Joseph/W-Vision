@@ -1,8 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "installCommand": "pnpm install",
-  "buildCommand": "pnpm --filter @workspace/tourvision build",
-  "outputDirectory": "artifacts/tourvision/dist/public",
+  "buildCommand": "pnpm --filter @workspace/tourvision build && rm -rf public && cp -R artifacts/tourvision/dist/public public",
+  "outputDirectory": "public",
   "rewrites": [
     {
       "source": "/(.*)",
