@@ -354,7 +354,7 @@ export default function NewTour() {
           ? "Tour limit reached"
           : "Could not start generation",
         description: apiNotReachable
-          ? "The app could not reach the API server. Set VITE_API_BASE_URL in Vercel to your live API URL (e.g. Railway), or update vercel.json to proxy /api to that host."
+          ? "The API is not reachable. Redeploy the latest main branch on Vercel and add server env vars from artifacts/api-server/.env (see DEPLOY.md)."
           : description,
         variant: "destructive",
       });

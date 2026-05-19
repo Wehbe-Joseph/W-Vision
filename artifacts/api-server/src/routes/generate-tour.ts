@@ -1,3 +1,4 @@
+import { waitUntil } from "@vercel/functions";
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { toursTable, profilesTable, tourPhotosTable } from "@workspace/db";
@@ -223,7 +224,7 @@ router.post("/generate-tour", async (req, res) => {
     // background — the status endpoint surfaces progress to the client.
     res.json({ tourId, shareToken });
 
-    runGenerationPipeline({
+    const pipeline = runGenerationPipeline({
       tourId,
       userId,
       dbTourCreated,
@@ -231,9 +232,19 @@ router.post("/generate-tour", async (req, res) => {
       processingStartedAt,
       userTier,
       reqLog: req.log,
-    }).catch((err) => {
-      req.log.error({ err, tourId }, "Background tour pipeline crashed");
     });
+
+    if (process.env.VERCEL) {
+      waitUntil(
+        pipeline.catch((err) => {
+          req.log.error({ err, tourId }, "Background tour pipeline crashed");
+        }),
+      );
+    } else {
+      pipeline.catch((err) => {
+        req.log.error({ err, tourId }, "Background tour pipeline crashed");
+      });
+    }
     return;
   } catch (err) {
     req.log.error(err);

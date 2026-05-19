@@ -14,8 +14,14 @@ async function buildAll() {
   const distDir = path.resolve(artifactDir, "dist");
   await rm(distDir, { recursive: true, force: true });
 
+  const isVercel = process.env.VERCEL === "1";
+  const entryPoints = [
+    path.resolve(artifactDir, "src/index.ts"),
+    path.resolve(artifactDir, "src/serverless.ts"),
+  ];
+
   await esbuild({
-    entryPoints: [path.resolve(artifactDir, "src/index.ts")],
+    entryPoints,
     platform: "node",
     bundle: true,
     format: "esm",
@@ -102,10 +108,12 @@ async function buildAll() {
       "electron",
     ],
     sourcemap: "linked",
-    plugins: [
-      // pino relies on workers to handle logging, instead of externalizing it we use a plugin to handle it
-      esbuildPluginPino({ transports: ["pino-pretty"] })
-    ],
+  plugins: isVercel
+      ? []
+      : [
+          // pino worker threads break on Vercel serverless; use stdout logging there.
+          esbuildPluginPino({ transports: ["pino-pretty"] }),
+        ],
     // Make sure packages that are cjs only (e.g. express) but are bundled continue to work in our esm output file
     banner: {
       js: `import { createRequire as __bannerCrReq } from 'node:module';

@@ -1,60 +1,68 @@
-# Production deployment (Vercel + API)
+# Production deployment (Vercel — frontend + API)
 
-The app has **two parts**:
+One Vercel project serves **both**:
 
-| Part | Host | Example |
-|------|------|---------|
-| Frontend (React) | **Vercel** | `https://your-app.vercel.app` |
-| API (Express) | **Railway** (or Render/Fly) | `https://your-api.up.railway.app` |
+- React app (static files in `public/`)
+- Express API (serverless function at `api/index.ts`, routes `/api/*`)
 
-Tour generation fails with **HTTP 405** or “could not reach the API server” when the frontend is live but the API is not deployed or `VITE_API_BASE_URL` is missing.
+You do **not** need Railway unless you prefer a separate API host.
 
 ---
 
-## 1. Deploy the API on Railway
+## 1. Vercel environment variables
 
-1. Open [Railway](https://railway.app) → **New Project** → **Deploy from GitHub repo** → select **W-Vision**.
-2. Railway should detect `Dockerfile` + `railway.toml` at the repo root.
-3. In Railway → **Variables**, add the same keys as `artifacts/api-server/.env` (at minimum):
-   - `DATABASE_URL`
-   - `SUPABASE_URL`
-   - `SUPABASE_ANON_KEY`
-   - `SUPABASE_SERVICE_ROLE_KEY`
-   - `WORLD_LABS_API_KEY`
-   - `APIFY_TOKEN`
-   - `PUBLIC_API_BASE_URL` = your Railway public URL + no trailing slash (e.g. `https://w-vision-api-production.up.railway.app`)
-4. Deploy and wait until healthy. Test:
-   ```bash
-   curl https://YOUR-RAILWAY-URL/api/healthz
-   ```
-   Expected: `{"status":"ok"}`
+In [Vercel](https://vercel.com) → your project → **Settings** → **Environment Variables**, add everything from `artifacts/api-server/.env` plus the frontend keys from `artifacts/tourvision/.env`:
 
-Copy the public Railway URL (no trailing slash).
+**Frontend (build-time):**
 
----
-
-## 2. Configure Vercel (frontend)
-
-In [Vercel](https://vercel.com) → your project → **Settings** → **Environment Variables**, add:
-
-| Variable | Value |
+| Variable | Source |
 |----------|--------|
-| `VITE_SUPABASE_URL` | Same as local `artifacts/tourvision/.env` |
-| `VITE_SUPABASE_ANON_KEY` | Same as local |
-| `VITE_API_BASE_URL` | **Your Railway API URL** (e.g. `https://xxx.up.railway.app`) |
+| `VITE_SUPABASE_URL` | `artifacts/tourvision/.env` |
+| `VITE_SUPABASE_ANON_KEY` | `artifacts/tourvision/.env` |
 
-Apply to **Production**, **Preview**, and **Development** if you use preview deploys.
+**API (runtime — serverless function):**
 
-**Redeploy** the Vercel project (Deployments → … → Redeploy) so the build picks up `VITE_API_BASE_URL`.
+| Variable | Required |
+|----------|----------|
+| `DATABASE_URL` | Yes |
+| `SUPABASE_URL` | Yes |
+| `SUPABASE_ANON_KEY` | Yes |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes |
+| `WORLD_LABS_API_KEY` | Yes (for 3D generation) |
+| `APIFY_TOKEN` | Yes (for listing scrape) |
+| `PUBLIC_API_BASE_URL` | Yes — set to `https://YOUR-VERCEL-DOMAIN.vercel.app` (no trailing slash) |
+| `RESEND_API_KEY` | Optional |
+| `WORLD_LABS_ENABLED` | Optional (`true` / `false`) |
+
+`VITE_API_BASE_URL` is **not** required when API runs on the same Vercel domain (default).
+
+Apply variables to **Production**, **Preview**, and **Development**, then **Redeploy**.
 
 ---
 
-## 3. Supabase Auth (production)
+## 2. Supabase Auth URLs
 
-In Supabase → **Authentication** → **URL Configuration**, add your Vercel URL:
+Supabase → **Authentication** → **URL Configuration**:
 
-- Site URL: `https://your-app.vercel.app`
-- Redirect URLs: `https://your-app.vercel.app/dashboard`, `https://your-app.vercel.app/login`
+- **Site URL**: `https://your-app.vercel.app`
+- **Redirect URLs**: `https://your-app.vercel.app/dashboard`, `https://your-app.vercel.app/login`
+
+---
+
+## 3. Verify after deploy
+
+```bash
+curl https://YOUR-VERCEL-DOMAIN.vercel.app/api/healthz
+# {"status":"ok"}
+```
+
+Then sign in and use **Generate 3D Tour**.
+
+---
+
+## Optional: separate API on Railway
+
+See `Dockerfile` and `railway.toml` if you want the API on Railway instead. In that case set `VITE_API_BASE_URL` to the Railway URL and remove reliance on the `/api` serverless function.
 
 ---
 
@@ -62,7 +70,7 @@ In Supabase → **Authentication** → **URL Configuration**, add your Vercel UR
 
 | Symptom | Fix |
 |---------|-----|
-| HTTP **405** on Generate | API not reachable; set `VITE_API_BASE_URL` and redeploy Vercel |
-| “Could not reach the API server” | Railway API down or wrong URL; check `/api/healthz` |
-| Vercel build fails: `VITE_API_BASE_URL is required` | Add that env var in Vercel, then redeploy |
-| CORS errors | API has `cors({ origin: true })`; ensure `VITE_API_BASE_URL` matches Railway URL exactly |
+| HTTP **405** on Generate | Redeploy latest `main`; ensure `/api` rewrite exists in `vercel.json` |
+| **500** on `/api/*` | Missing env vars on Vercel (check function logs) |
+| Generation starts then stops | Check Vercel function logs; World Labs / DB errors |
+| Build fails on `serverless.mjs` | Run `pnpm --filter @workspace/api-server build` before deploy |
