@@ -715,9 +715,16 @@ router.get("/tours/public/:shareToken", async (req, res) => {
     const mem = findMemTourByShareToken(req.params.shareToken);
     if (mem) refreshTourExpiry(mem);
     const ownerTier = ((agent?.subscriptionTier as string | null) ?? "free").toLowerCase();
+    const ownerSubscriptionStatus = (
+      (agent?.subscriptionStatus as string | null) ?? "inactive"
+    ).toLowerCase();
+    const ownerHasActivePaidAccess =
+      ownerTier !== "free" && ownerSubscriptionStatus === "active";
     const dbDerivedExpiresAt =
       mem?.expiresAt ??
-      (ownerTier === "free" ? tour.createdAt.getTime() + FREE_TIER_TTL_MS : null);
+      (!ownerHasActivePaidAccess
+        ? tour.createdAt.getTime() + FREE_TIER_TTL_MS
+        : null);
     const frozen =
       mem?.frozen ??
       (dbDerivedExpiresAt !== null ? now >= dbDerivedExpiresAt : false);
@@ -725,7 +732,7 @@ router.get("/tours/public/:shareToken", async (req, res) => {
       dbDerivedExpiresAt !== null
         ? new Date(dbDerivedExpiresAt).toISOString()
         : null;
-    const createdOnTier = mem?.createdOnTier ?? (ownerTier || "free");
+    const createdOnTier = mem?.createdOnTier ?? (ownerHasActivePaidAccess ? ownerTier : "free");
 
     if (frozen) {
       return res.status(410).json({

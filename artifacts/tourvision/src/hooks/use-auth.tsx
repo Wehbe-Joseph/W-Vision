@@ -7,8 +7,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { setAuthTokenGetter } from "@workspace/api-client-react";
-import { supabase } from "@/lib/supabase";
+import { setAuthTokenGetter, setBaseUrl } from "@workspace/api-client-react";
+import { supabase, supabaseEnvError } from "@/lib/supabase";
 import type { Session, User } from "@supabase/supabase-js";
 
 export interface AuthUser {
@@ -66,14 +66,22 @@ function mapUser(user: User | null | undefined): AuthUser | null {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(!supabaseEnvError);
 
   const getAccessToken = useCallback(async () => {
+    if (!supabase) return null;
     const { data } = await supabase.auth.getSession();
     return data.session?.access_token ?? null;
   }, []);
 
   useEffect(() => {
+    if (supabaseEnvError || !supabase) {
+      setUser(null);
+      setIsLoading(false);
+      setAuthTokenGetter(null);
+      return;
+    }
+
     setAuthTokenGetter(() => getAccessToken());
 
     let mounted = true;
@@ -107,7 +115,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [getAccessToken]);
 
+  useEffect(() => {
+    const configuredApiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim();
+    setBaseUrl(configuredApiBase || null);
+    return () => setBaseUrl(null);
+  }, []);
+
   const loginWithGoogle = useCallback(async () => {
+    if (!supabase) {
+      throw new Error(supabaseEnvError ?? "Supabase is not configured.");
+    }
     const redirectTo = `${window.location.origin}/dashboard`;
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -118,6 +135,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginWithEmail = useCallback(
     async (email: string, password: string) => {
+      if (!supabase) {
+        throw new Error(supabaseEnvError ?? "Supabase is not configured.");
+      }
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
     },
@@ -126,6 +146,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signupWithEmail = useCallback(
     async (email: string, password: string, fullName?: string): Promise<SignupResult> => {
+      if (!supabase) {
+        throw new Error(supabaseEnvError ?? "Supabase is not configured.");
+      }
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -145,6 +168,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(async () => {
+    if (!supabase) {
+      throw new Error(supabaseEnvError ?? "Supabase is not configured.");
+    }
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
     // Full navigation so protected routes unmount and user lands on marketing home.

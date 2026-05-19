@@ -7,6 +7,7 @@ import SparkViewer from "@/components/tour/SparkViewer";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import WVisionLogo from "@/components/WVisionLogo";
+import { getApiUrl } from "@/lib/runtime-api";
 
 interface SceneExtra {
   id: string;
@@ -197,7 +198,7 @@ export default function TourViewer() {
 
     setLeadLoading(true);
     try {
-      const res = await fetch("/api/tours/lead", {
+      const res = await fetch(getApiUrl("/api/tours/lead"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -338,7 +339,7 @@ export default function TourViewer() {
           </button>
           <button
             onClick={() => setShowLeadModal(true)}
-            className="h-8 px-3 rounded-md text-xs bg-blue-600 hover:bg-blue-500 text-white"
+            className="h-8 px-3 rounded-md border border-white/20 bg-white/5 text-xs text-white hover:bg-white/12 backdrop-blur-sm"
           >
             Request a Visit
           </button>
@@ -385,13 +386,13 @@ export default function TourViewer() {
                           }}
                           className={`w-full text-left px-2.5 py-2 rounded-md text-sm flex items-center gap-2 border-l-2 ${
                             active
-                              ? "bg-blue-600/15 border-blue-500"
+                              ? "bg-white/12 border-white/70"
                               : "border-transparent hover:bg-white/5"
                           }`}
                         >
                           <span
                             className={`h-2.5 w-2.5 rounded-full ${
-                              room.ready ? "bg-blue-500" : "bg-zinc-500"
+                              room.ready ? "bg-white" : "bg-zinc-500"
                             }`}
                           />
                           <span className="truncate">{room.label}</span>
@@ -421,14 +422,14 @@ export default function TourViewer() {
               exit={{ opacity: 0, y: 12, scale: 0.98 }}
               onSubmit={handleLeadSubmit}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-md rounded-2xl bg-white text-black p-5 shadow-2xl"
+            className="w-full max-w-md rounded-2xl bg-[rgba(12,12,12,0.95)] text-white border border-white/15 backdrop-blur-xl p-5 shadow-2xl"
             >
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-lg font-semibold">Interested in this property?</h2>
                 <button
                   type="button"
                   onClick={() => !leadLoading && setShowLeadModal(false)}
-                  className="h-7 w-7 rounded-md hover:bg-black/5 flex items-center justify-center"
+                  className="h-7 w-7 rounded-md hover:bg-white/10 flex items-center justify-center"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -442,7 +443,7 @@ export default function TourViewer() {
                   onChange={(e) =>
                     setLeadForm((f) => ({ ...f, name: e.target.value }))
                   }
-                  className="w-full h-10 rounded-md border border-zinc-300 px-3 text-sm"
+                  className="w-full h-10 rounded-md border border-white/20 bg-white/5 px-3 text-sm placeholder:text-white/50"
                 />
                 <input
                   type="email"
@@ -452,7 +453,7 @@ export default function TourViewer() {
                   onChange={(e) =>
                     setLeadForm((f) => ({ ...f, email: e.target.value }))
                   }
-                  className="w-full h-10 rounded-md border border-zinc-300 px-3 text-sm"
+                  className="w-full h-10 rounded-md border border-white/20 bg-white/5 px-3 text-sm placeholder:text-white/50"
                 />
                 <input
                   type="tel"
@@ -461,7 +462,7 @@ export default function TourViewer() {
                   onChange={(e) =>
                     setLeadForm((f) => ({ ...f, phone: e.target.value }))
                   }
-                  className="w-full h-10 rounded-md border border-zinc-300 px-3 text-sm"
+                  className="w-full h-10 rounded-md border border-white/20 bg-white/5 px-3 text-sm placeholder:text-white/50"
                 />
                 <textarea
                   placeholder="Message (optional)"
@@ -469,14 +470,14 @@ export default function TourViewer() {
                   onChange={(e) =>
                     setLeadForm((f) => ({ ...f, message: e.target.value }))
                   }
-                  className="w-full min-h-24 rounded-md border border-zinc-300 px-3 py-2 text-sm resize-none"
+                  className="w-full min-h-24 rounded-md border border-white/20 bg-white/5 px-3 py-2 text-sm resize-none placeholder:text-white/50"
                 />
               </div>
 
               <button
                 type="submit"
                 disabled={leadLoading || leadSuccess}
-                className="mt-4 h-10 w-full rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-500 disabled:opacity-60"
+                className="mt-4 h-10 w-full rounded-md border border-white/20 bg-white/10 text-white text-sm font-semibold hover:bg-white/15 disabled:opacity-60"
               >
                 {leadLoading
                   ? "Sending..."
@@ -485,7 +486,7 @@ export default function TourViewer() {
                   : "Send Request"}
               </button>
               {leadSuccess && (
-                <p className="mt-2 text-xs text-zinc-600 text-center">
+                <p className="mt-2 text-xs text-white/70 text-center">
                   Request sent! The agent will contact you shortly.
                 </p>
               )}

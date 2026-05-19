@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getApiUrl } from "@/lib/runtime-api";
 
 interface ListingImage {
   url: string;
@@ -65,7 +66,7 @@ export default function ListingImport() {
     }
     setLoading(true);
     try {
-      const res = await fetch("/api/scrape-listing", {
+      const res = await fetch(getApiUrl("/api/scrape-listing"), {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ url: url.trim() }),

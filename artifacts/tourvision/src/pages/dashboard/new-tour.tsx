@@ -19,6 +19,7 @@ import {
   loadPendingTour, clearPendingTour,
   filesToPendingPhotos, PendingPhoto,
 } from "@/hooks/use-pending-tour";
+import { getApiUrl } from "@/lib/runtime-api";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -142,7 +143,7 @@ export default function NewTour() {
     apifyFetchRef.current = setTimeout(async () => {
       try {
         setIsFetchingImages(true);
-        const res = await fetch("/api/scrape-listing", {
+        const res = await fetch(getApiUrl("/api/scrape-listing"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ url: trimmed }),
@@ -243,7 +244,7 @@ export default function NewTour() {
           return;
         }
 
-        const uploadRes = await fetch("/api/images/upload", {
+        const uploadRes = await fetch(getApiUrl("/api/images/upload"), {
           method: "POST",
           credentials: "include",
           headers: { Authorization: `Bearer ${token}` },
