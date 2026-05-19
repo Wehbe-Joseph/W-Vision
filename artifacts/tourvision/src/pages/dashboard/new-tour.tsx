@@ -341,13 +341,21 @@ export default function NewTour() {
         err instanceof ApiError &&
         (err.status === 403 ||
           (err.data as { code?: string } | null)?.code === "LIMIT_REACHED");
+      const apiNotReachable =
+        err instanceof ApiError &&
+        (err.status === 405 ||
+          err.status === 404 ||
+          err.status === 502 ||
+          err.status === 503);
       toast({
         title: unauthorized
           ? "Please sign in"
           : limitReached
           ? "Tour limit reached"
           : "Could not start generation",
-        description,
+        description: apiNotReachable
+          ? "The app could not reach the API server. Set VITE_API_BASE_URL in Vercel to your live API URL (e.g. Railway), or update vercel.json to proxy /api to that host."
+          : description,
         variant: "destructive",
       });
       if (unauthorized) {
