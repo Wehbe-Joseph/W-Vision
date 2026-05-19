@@ -1,0 +1,12 @@
+node_modules
+**/node_modules
+.git
+.pnpm-store
+**/.env
+**/.env.local
+**/dist
+public
+artifacts/tourvision/dist
+.cursor
+*.md
+!SETUP.md

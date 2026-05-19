@@ -16,6 +16,12 @@ const basePath = process.env.BASE_PATH ?? "/";
 
 const apiTarget = process.env.VITE_API_PROXY_TARGET ?? "http://localhost:8080";
 
+if (process.env.VERCEL === "1" && !process.env.VITE_API_BASE_URL?.trim()) {
+  throw new Error(
+    "VITE_API_BASE_URL is required on Vercel. Deploy the API (see DEPLOY.md), then set VITE_API_BASE_URL to that URL in Project Settings → Environment Variables and redeploy.",
+  );
+}
+
 export default defineConfig({
   base: basePath,
   optimizeDeps: {

@@ -1,0 +1,11 @@
+# Railway: New Project → Deploy from GitHub → select W-Vision repo.
+# After deploy, copy the public URL into Vercel as VITE_API_BASE_URL.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+healthcheckPath = "/api/healthz"
+healthcheckTimeout = 120
+restartPolicyType = "ON_FAILURE"
