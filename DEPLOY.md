@@ -1,11 +1,21 @@
 # Production deployment (Vercel — frontend + API)
 
-One Vercel project serves **both**:
+One Vercel project serves **both** the React app and the Express API (`/api/*` serverless function).
 
-- React app (static files in `public/`)
-- Express API (serverless function at `api/index.ts`, routes `/api/*`)
+---
 
-You do **not** need Railway unless you prefer a separate API host.
+## Critical Vercel project settings
+
+| Setting | Value |
+|---------|--------|
+| **Root Directory** | `artifacts/tourvision` |
+| **Framework Preset** | Vite |
+| **Output Directory** | leave empty (uses `vercel.json`) |
+| **Build / Install commands** | leave empty (uses `vercel.json`) |
+
+If Root Directory is wrong, `/api/*` never deploys and tour generation fails.
+
+**Do not set `VITE_API_BASE_URL`** on Vercel unless you host the API on a *separate* domain. If you added it earlier (e.g. Railway), **delete it** and redeploy so requests use same-origin `/api`.
 
 ---
 

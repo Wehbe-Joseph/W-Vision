@@ -3,6 +3,7 @@
 # compiled output
 dist
 public
+artifacts/tourvision/api/serverless.mjs
 tmp
 out-tsc
 *.tsbuildinfo
