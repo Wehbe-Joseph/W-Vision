@@ -92,4 +92,4 @@ Earlier the anon and service_role keys were committed to `.env.example`. Treat t
 - **`Missing VITE_SUPABASE_URL`**: confirm `artifacts/tourvision/.env` exists and restart Vite.
 - **`DATABASE_URL must be set`**: confirm `artifacts/api-server/.env` exists and restart the API.
 - **Google OAuth `redirect_to is not allowed`**: add the redirect URL in step 3.
-- **`HTTP 405` on "Generate 3D Tour" (Vercel)**: the browser POSTed to the static frontend, not the Express API. Set **`VITE_API_BASE_URL`** in Vercel to your live API (e.g. `https://w-vision-api-production.up.railway.app`) and redeploy, or ensure root **`vercel.json`** proxies `/api/*` to that host. Confirm the API is up: `GET /api/healthz` should return 200.
+- **`HTTP 405` on "Generate 3D Tour" (Vercel)**: redeploy latest `main`, delete stale `VITE_API_BASE_URL`, and confirm `GET https://w-vision-tourvision-iauj.vercel.app/api/healthz` returns JSON (not HTML).

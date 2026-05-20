@@ -1,4 +1,5 @@
 import { randomBytes } from "crypto";
+import { resolvePublicApiBaseUrl } from "./resolvePublicApiBaseUrl";
 
 interface StoredImage {
   data: Buffer;
@@ -40,6 +41,9 @@ export function getPublicBaseUrl(req: { headers: Record<string, string | string[
     return `https://${firstDomain}`;
   }
   const proto = req.get("x-forwarded-proto") ?? "https";
-  const host = req.get("host") ?? "localhost";
-  return `${proto}://${host}`;
+  const host = req.get("host");
+  if (host && !/localhost|127\.0\.0\.1/i.test(host)) {
+    return `${proto}://${host}`;
+  }
+  return resolvePublicApiBaseUrl();
 }

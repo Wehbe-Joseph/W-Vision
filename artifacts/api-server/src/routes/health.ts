@@ -1,6 +1,10 @@
 import { Router, type IRouter } from "express";
 import { HealthCheckResponse } from "@workspace/api-zod";
 import { isWorldLabsEnabled } from "../lib/worldlabs";
+import {
+  getConfiguredPublicApiBaseForDiagnostics,
+  isPublicApiBaseConfigured,
+} from "../lib/resolvePublicApiBaseUrl";
 
 const router: IRouter = Router();
 
@@ -10,11 +14,6 @@ function envPresent(name: string): boolean {
 }
 
 function integrationStatus() {
-  const publicApiBase = (process.env.PUBLIC_API_BASE_URL ?? "").trim();
-  const publicApiLooksLocal =
-    !publicApiBase ||
-    /localhost|127\.0\.0\.1|:8080\b/i.test(publicApiBase);
-
   return {
     apify: {
       configured: envPresent("APIFY_TOKEN"),
@@ -36,8 +35,8 @@ function integrationStatus() {
         envPresent("SUPABASE_SERVICE_ROLE_KEY"),
     },
     publicApiBaseUrl: {
-      configured: !publicApiLooksLocal,
-      value: publicApiLooksLocal ? null : publicApiBase.replace(/\/+$/, ""),
+      configured: isPublicApiBaseConfigured(),
+      value: getConfiguredPublicApiBaseForDiagnostics(),
     },
   };
 }

@@ -1,6 +1,7 @@
 import { randomBytes } from "crypto";
 import { requireSupabaseAdmin, supabaseAdmin } from "./supabaseAdmin";
 import { storeImage, getPublicBaseUrl } from "./imageStore";
+import { resolvePublicApiBaseUrl } from "./resolvePublicApiBaseUrl";
 import { logger } from "./logger";
 import type { Request } from "express";
 
@@ -179,7 +180,7 @@ export async function uploadTourImage(
   const id = storeImage(data, mimeType);
   const baseUrl = req
     ? getPublicBaseUrl(req as Parameters<typeof getPublicBaseUrl>[0])
-    : (process.env.PUBLIC_API_BASE_URL ?? "http://localhost:8080");
+    : resolvePublicApiBaseUrl();
   return { key: id, publicUrl: `${baseUrl}/api/images/${id}`, isLocal: true };
 }
 

@@ -44,7 +44,7 @@ In [Vercel](https://vercel.com) → your project → **Settings** → **Environm
 | `WORLD_LABS_API_KEY` | Yes (for 3D generation) |
 | `APIFY_TOKEN` | Yes (for listing scrape) |
 | `GEMINI_API_KEY` | Yes (for room classification) |
-| `PUBLIC_API_BASE_URL` | Yes — set to `https://YOUR-VERCEL-DOMAIN.vercel.app` (no trailing slash) |
+| `PUBLIC_API_BASE_URL` | Yes — set to `https://w-vision-tourvision-iauj.vercel.app` (no trailing slash). If unset or still `localhost`, the server auto-uses `VERCEL_URL` on Vercel. |
 | `RESEND_API_KEY` | Optional |
 | `WORLD_LABS_ENABLED` | Optional (`true` / `false`) |
 
@@ -58,18 +58,21 @@ Apply variables to **Production**, **Preview**, and **Development**, then **Rede
 
 Supabase → **Authentication** → **URL Configuration**:
 
-- **Site URL**: `https://your-app.vercel.app`
-- **Redirect URLs**: `https://your-app.vercel.app/dashboard`, `https://your-app.vercel.app/login`
+- **Site URL**: `https://w-vision-tourvision-iauj.vercel.app`
+- **Redirect URLs**:
+  - `https://w-vision-tourvision-iauj.vercel.app`
+  - `https://w-vision-tourvision-iauj.vercel.app/dashboard`
+  - `https://w-vision-tourvision-iauj.vercel.app/login`
 
 ---
 
 ## 3. Verify after deploy
 
 ```bash
-curl https://YOUR-VERCEL-DOMAIN.vercel.app/api/healthz
+curl https://w-vision-tourvision-iauj.vercel.app/api/healthz
 # {"status":"ok"}
 
-curl https://YOUR-VERCEL-DOMAIN.vercel.app/api/healthz/integrations
+curl https://w-vision-tourvision-iauj.vercel.app/api/healthz/integrations
 # {"status":"ok","integrations":{"apify":{"configured":true},...}}
 ```
 
@@ -91,7 +94,7 @@ See `Dockerfile` and `railway.toml` if you want the API on Railway instead. In t
 |---------|-----|
 | HTTP **405** / **404** on `/api/*` | Redeploy latest `main`; confirm Root Directory is `artifacts/tourvision` and `server.js` exists; delete stale `VITE_API_BASE_URL` |
 | Apify / Gemini / World Labs never called | Open `/api/healthz/integrations` — add missing env vars on Vercel |
-| **`PUBLIC_API_BASE_URL` is localhost** | Set it to `https://YOUR-VERCEL-DOMAIN.vercel.app` on Vercel |
+| **`PUBLIC_API_BASE_URL` is localhost** | Update on Vercel to `https://w-vision-tourvision-iauj.vercel.app`, or redeploy — code now auto-detects `VERCEL_URL` when localhost is set |
 | **500** on `/api/*` | Missing env vars on Vercel (check function logs) |
 | Generation starts then stops | Check Vercel function logs; World Labs / DB errors |
 | Build fails on `serverless.mjs` | Run `pnpm --filter @workspace/api-server build` before deploy |
