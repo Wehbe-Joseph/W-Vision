@@ -90,7 +90,6 @@ interface MarbleWorld {
       };
     };
     mesh?: { collider_mesh_url?: string };
-    imagery?: { pano_url?: string };
   };
 }
 
@@ -155,27 +154,110 @@ function mapProgress(s: ProgressStatus | undefined): WorldStatusResult["generati
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
+interface PrepareUploadResponse {
+  media_asset?: { media_asset_id?: string };
+  upload_info?: {
+    upload_url?: string;
+    required_headers?: Record<string, string>;
+  };
+}
+
+function fileExtensionFrom(imageUrl: string, mimeType: string): string {
+  const fromMime = mimeType.split("/")[1]?.split("+")[0]?.toLowerCase();
+  if (fromMime === "jpeg" || fromMime === "jpg") return "jpg";
+  if (fromMime === "png" || fromMime === "webp") return fromMime;
+  const fromUrl = imageUrl.match(/\.(jpe?g|png|webp)(?:\?|$)/i)?.[1]?.toLowerCase();
+  if (fromUrl === "jpeg") return "jpg";
+  if (fromUrl) return fromUrl;
+  return "jpg";
+}
+
+async function fetchImageBytes(
+  imageUrl: string,
+): Promise<{ bytes: Buffer; mimeType: string; extension: string }> {
+  const res = await fetch(imageUrl);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch image for Marble upload: HTTP ${res.status}`);
+  }
+  const mimeType = res.headers.get("content-type")?.split(";")[0] ?? "image/jpeg";
+  const bytes = Buffer.from(await res.arrayBuffer());
+  return {
+    bytes,
+    mimeType,
+    extension: fileExtensionFrom(imageUrl, mimeType),
+  };
+}
+
+/** Upload one photo to World Labs and return its `media_asset_id`. */
+async function uploadMarbleMediaAsset(imageUrl: string): Promise<string> {
+  const { bytes, mimeType, extension } = await fetchImageBytes(imageUrl);
+  const fileName = `tourvision-${randomBytes(8).toString("hex")}.${extension}`;
+
+  const prepareRes = await fetch(
+    `${WORLDLABS_API_BASE}/marble/v1/media-assets:prepare_upload`,
+    {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({
+        file_name: fileName,
+        extension,
+        kind: "image",
+      }),
+    },
+  );
+
+  if (!prepareRes.ok) {
+    const errBody = await prepareRes.text().catch(() => "");
+    throw new Error(
+      `WorldLabs prepare_upload error ${prepareRes.status}: ${errBody || prepareRes.statusText}`,
+    );
+  }
+
+  const prepared = (await prepareRes.json()) as PrepareUploadResponse;
+  const mediaAssetId = prepared.media_asset?.media_asset_id;
+  const uploadUrl = prepared.upload_info?.upload_url;
+  if (!mediaAssetId || !uploadUrl) {
+    throw new Error("WorldLabs prepare_upload did not return media_asset_id/upload_url");
+  }
+
+  const uploadHeaders = new Headers(prepared.upload_info?.required_headers ?? {});
+  if (!uploadHeaders.has("content-type")) {
+    uploadHeaders.set("content-type", mimeType);
+  }
+
+  const uploadRes = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: uploadHeaders,
+    body: bytes,
+  });
+
+  if (!uploadRes.ok) {
+    const errBody = await uploadRes.text().catch(() => "");
+    throw new Error(
+      `WorldLabs media upload error ${uploadRes.status}: ${errBody || uploadRes.statusText}`,
+    );
+  }
+
+  return mediaAssetId;
+}
+
 /**
- * Kick off a new world generation from one or more publicly-fetchable image
- * URLs. Returns the long-running operation id to poll.
+ * Generate one Marble world from a single listing photo.
  *
- * The API supports up to multiple images via the `multi-image` prompt.
- * Marble expects a `world_prompt` payload — NOT the older `generation_input`
- * shape that previously lived in this file (which is why prod traffic was
- * silently 404-ing for months).
+ * Marble accepts ONE image per world — not multi-photo layouts, not rotation
+ * metadata, and not panoramic/equirectangular bundles.
  */
-export async function createWorld(imageUrls: string[]): Promise<CreateWorldResult> {
-  // Marble caps multi-image prompts; trim defensively.
-  const usable = imageUrls.filter((u) => !!u && u.startsWith("https://")).slice(0, 8);
-  if (usable.length === 0) {
-    throw new Error("At least one public https:// image URL is required");
+export async function createWorld(imageUrl: string): Promise<CreateWorldResult> {
+  const uri = imageUrl.trim();
+  if (!uri.startsWith("https://")) {
+    throw new Error("A public https:// image URL is required for World Labs");
   }
 
   if (!isWorldLabsEnabled()) {
     const operationId = `${WORLD_LABS_DRY_RUN_PREFIX}${randomBytes(16).toString("hex")}`;
     logger.warn(
-      { operationId },
-      "World Labs disabled (WORLD_LABS_ENABLED=false) — skipping worlds:generate; no Marble credits used",
+      { operationId, imageUrl: uri },
+      "World Labs disabled (WORLD_LABS_ENABLED=false) — skipping world generation; no Marble credits used",
     );
     return { operationId };
   }
@@ -184,30 +266,17 @@ export async function createWorld(imageUrls: string[]): Promise<CreateWorldResul
     throw new Error("WORLD_LABS_API_KEY is not configured");
   }
 
-  let worldPrompt: Record<string, unknown>;
-  if (usable.length === 1) {
-    worldPrompt = {
-      type: "image",
-      image_prompt: { source: "uri", uri: usable[0] },
-    };
-  } else {
-    // Let the spatial AI engine infer relative camera placement via
-    // automatic layout. We intentionally omit azimuth values here.
-    worldPrompt = {
-      type: "multi-image",
-      multi_image_prompt: usable.map((uri) => ({
-        content: { source: "uri", uri },
-      })),
-    };
-  }
+  const mediaAssetId = await uploadMarbleMediaAsset(uri);
 
   const body = {
-    display_name: "TourVision listing",
     model: MARBLE_MODEL,
-    world_prompt: worldPrompt,
-    // Marble worlds are private by default. Make them public so the
-    // share link works without the viewer needing a worldlabs.ai account
-    // with explicit access. Anyone with the URL can view, no edit.
+    world_prompt: {
+      type: "image",
+      image_prompt: {
+        source: "media_asset",
+        media_asset_id: mediaAssetId,
+      },
+    },
     permission: { public: true },
   };
 
@@ -228,6 +297,11 @@ export async function createWorld(imageUrls: string[]): Promise<CreateWorldResul
   if (!data.operation_id) {
     throw new Error("WorldLabs API did not return an operation_id");
   }
+
+  logger.info(
+    { operationId: data.operation_id, mediaAssetId, imageUrl: uri },
+    "World Labs world generation started (single photo)",
+  );
 
   return { operationId: data.operation_id };
 }
@@ -284,10 +358,7 @@ export async function getOperationStatus(
       ? extractSplatSourceUrl(op.response)
       : null;
 
-  const previewImageUrl =
-    op.response?.assets?.thumbnail_url ??
-    op.response?.assets?.imagery?.pano_url ??
-    null;
+  const previewImageUrl = op.response?.assets?.thumbnail_url ?? null;
 
   const error =
     op.error?.message ??

@@ -1,31 +1,26 @@
-import { type ImageClassification, type RoomType } from "./gemini";
+import { type ImageClassification } from "./gemini";
 
 /**
- * A "scene" is a set of photos that should be sent to Marble together to
- * produce ONE 3D world. We group by `roomType` so each room of the home
- * (Living Room, Master Bedroom, Bathroom, …) becomes its own walkable space.
- *
- * Future enhancement: visually cluster bedrooms so two bedrooms in the same
- * listing become two separate scenes (Bedroom 1, Bedroom 2). Right now we
- * keep it simple — one scene per detected room type.
+ * One walkable 3D room in the tour. Marble gets exactly ONE photo —
+ * the best-ranked image in this room group.
  */
 export interface SceneGroup {
   /** Stable identifier within a tour, e.g. "living-room" or "master-bedroom". */
   id: string;
   /** Display label shown in the room sidebar. */
   label: string;
-  roomType: RoomType;
-  /** Best photo (highest quality * wow) — used as the sidebar thumbnail. */
+  roomType: ImageClassification["roomType"];
+  /** Best photo (sidebar thumbnail). Same as `worldImageUrl`. */
   thumbnailUrl: string;
-  /** All photos that belong in this 3D world, ordered best-first. */
-  imageUrls: string[];
-  /** Per-image classifications, retained for debugging / future tuning. */
+  /** Single photo sent to World Labs Marble for this room. */
+  worldImageUrl: string;
+  /** Gemini classifications for all photos in this room (debug / UI). */
   classifications: ImageClassification[];
-  /** True when at least one photo in the group passed Gemini's 3D filter. */
+  /** True when the selected photo passed Gemini's 3D filter. */
   recommendedFor3d: boolean;
 }
 
-const ROOM_PRIORITY: Record<RoomType, number> = {
+const ROOM_PRIORITY: Record<ImageClassification["roomType"], number> = {
   "Living Room": 1,
   "Kitchen": 2,
   "Master Bedroom": 3,
@@ -47,11 +42,26 @@ function slugify(label: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
+/** Highest quality + wow score wins; prefer photos flagged for 3D. */
+export function selectBestPhotoForRoom(
+  items: ImageClassification[],
+): ImageClassification | null {
+  if (items.length === 0) return null;
+
+  const ranked = [...items].sort((a, b) => {
+    if (a.recommendedFor3d !== b.recommendedFor3d) {
+      return a.recommendedFor3d ? -1 : 1;
+    }
+    return b.combinedScore - a.combinedScore;
+  });
+
+  return ranked[0] ?? null;
+}
+
 export function groupClassificationsIntoScenes(
   classifications: ImageClassification[],
 ): SceneGroup[] {
-  // Bucket by roomType.
-  const buckets = new Map<RoomType, ImageClassification[]>();
+  const buckets = new Map<ImageClassification["roomType"], ImageClassification[]>();
   for (const c of classifications) {
     if (!buckets.has(c.roomType)) buckets.set(c.roomType, []);
     buckets.get(c.roomType)!.push(c);
@@ -59,20 +69,21 @@ export function groupClassificationsIntoScenes(
 
   const groups: SceneGroup[] = [];
   for (const [roomType, items] of buckets) {
-    // Sort by quality + wow descending so the best photo leads the group.
-    const sorted = [...items].sort(
-      (a, b) =>
-        b.qualityScore + b.wowFactor - (a.qualityScore + a.wowFactor),
-    );
-    const recommended = sorted.filter((c) => c.recommendedFor3d);
+    const best = selectBestPhotoForRoom(items);
+    if (!best) continue;
+
+    for (const item of items) {
+      item.isBestInRoom = item.imageUrl === best.imageUrl;
+    }
+
     groups.push({
       id: slugify(roomType),
       label: roomType,
       roomType,
-      thumbnailUrl: sorted[0].imageUrl,
-      imageUrls: sorted.map((c) => c.imageUrl),
-      classifications: sorted,
-      recommendedFor3d: recommended.length > 0,
+      thumbnailUrl: best.imageUrl,
+      worldImageUrl: best.imageUrl,
+      classifications: items,
+      recommendedFor3d: best.recommendedFor3d,
     });
   }
 

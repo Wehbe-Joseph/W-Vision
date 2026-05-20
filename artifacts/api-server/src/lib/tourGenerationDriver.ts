@@ -150,7 +150,7 @@ async function buildScenesFromImages(
     label: g.label,
     roomType: g.roomType,
     thumbnailUrl: g.thumbnailUrl,
-    imageUrls: g.imageUrls,
+    imageUrls: [g.worldImageUrl],
     operationId: null,
     worldId: null,
     generationStatus: "queued",
@@ -184,7 +184,7 @@ async function dispatchNextScene(
   if (!pending) return;
 
   try {
-    const result = await createWorld(pending.imageUrls);
+    const result = await createWorld(pending.imageUrls[0] ?? pending.thumbnailUrl);
     updateMemScene(tourId, pending.id, {
       operationId: result.operationId,
       generationStatus: "processing",

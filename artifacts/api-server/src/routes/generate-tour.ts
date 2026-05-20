@@ -517,7 +517,7 @@ async function resumeLockedScenes(opts: {
     let lastErr: unknown = null;
     while (attempt < 4) {
       try {
-        const result = await createWorld(scene.imageUrls);
+        const result = await createWorld(scene.imageUrls[0] ?? scene.thumbnailUrl);
         updateMemScene(tourId, scene.id, {
           operationId: result.operationId,
           generationStatus: "processing",
@@ -623,7 +623,7 @@ async function runGenerationPipeline(ctx: PipelineCtx): Promise<void> {
     label: g.label,
     roomType: g.roomType,
     thumbnailUrl: g.thumbnailUrl,
-    imageUrls: g.imageUrls,
+    imageUrls: [g.worldImageUrl],
     operationId: null,
     worldId: null,
     generationStatus: "queued",
@@ -677,7 +677,7 @@ async function runGenerationPipeline(ctx: PipelineCtx): Promise<void> {
     let lastErr: unknown = null;
     while (attempt < 4) {
       try {
-        const result = await createWorld(scene.imageUrls);
+        const result = await createWorld(scene.imageUrls[0] ?? scene.thumbnailUrl);
         updateMemScene(tourId, scene.id, {
           operationId: result.operationId,
           generationStatus: "processing",

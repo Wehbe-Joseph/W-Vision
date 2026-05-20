@@ -49,9 +49,13 @@ export interface ImageClassification {
   roomType: RoomType;
   qualityScore: number;
   wowFactor: number;
+  /** quality_score + wow_factor — used to pick one photo per room. */
+  combinedScore: number;
   isInterior: boolean;
   isWideAngle: boolean;
   recommendedFor3d: boolean;
+  /** Set when this photo is the single Marble input for its room group. */
+  isBestInRoom?: boolean;
   /** Set when classification fell back to a heuristic / synthetic label. */
   fallback?: boolean;
   /** Optional error message for the bad image (only when fallback=true). */
@@ -254,11 +258,14 @@ function parseClassification(
   try {
     const raw = JSON.parse(cleaned) as Record<string, unknown>;
     const roomType = normalizeRoomType(raw.room_type);
+    const qualityScore = clampNum(raw.quality_score, 1, 10, 5);
+    const wowFactor = clampNum(raw.wow_factor, 1, 10, 5);
     return {
       imageUrl,
       roomType,
-      qualityScore: clampNum(raw.quality_score, 1, 10, 5),
-      wowFactor: clampNum(raw.wow_factor, 1, 10, 5),
+      qualityScore,
+      wowFactor,
+      combinedScore: qualityScore + wowFactor,
       isInterior: typeof raw.is_interior === "boolean" ? raw.is_interior : true,
       isWideAngle:
         typeof raw.is_wide_angle === "boolean" ? raw.is_wide_angle : false,
@@ -299,6 +306,7 @@ function synthesizeFallback(
     roomType: "Other",
     qualityScore: 5,
     wowFactor: 5,
+    combinedScore: 10,
     isInterior: true,
     isWideAngle: false,
     recommendedFor3d: false,
