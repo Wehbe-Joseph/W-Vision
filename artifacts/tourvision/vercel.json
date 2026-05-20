@@ -5,12 +5,16 @@
   "outputDirectory": "dist/public",
   "rewrites": [
     {
+      "source": "/api/(.*)",
+      "destination": "/api"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
   ],
   "functions": {
-    "server.js": {
+    "api/index.js": {
       "maxDuration": 300,
       "memory": 1024
     }

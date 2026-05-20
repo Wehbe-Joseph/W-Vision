@@ -5,12 +5,16 @@
   "outputDirectory": "artifacts/tourvision/dist/public",
   "rewrites": [
     {
+      "source": "/api/(.*)",
+      "destination": "/api"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
   ],
   "functions": {
-    "artifacts/tourvision/server.js": {
+    "artifacts/tourvision/api/index.js": {
       "maxDuration": 300,
       "memory": 1024
     }
