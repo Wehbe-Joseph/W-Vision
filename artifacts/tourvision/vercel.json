@@ -10,11 +10,7 @@
     }
   ],
   "functions": {
-    "api/index.js": {
-      "maxDuration": 300,
-      "memory": 1024
-    },
-    "api/[...path].js": {
+    "server.js": {
       "maxDuration": 300,
       "memory": 1024
     }

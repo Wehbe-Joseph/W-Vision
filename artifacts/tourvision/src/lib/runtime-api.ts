@@ -1,6 +1,6 @@
-const configuredApiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim();
+import { resolveApiBaseUrl } from "./resolve-api-base";
 
-const apiBase = configuredApiBase ? configuredApiBase.replace(/\/+$/, "") : "";
+const apiBase = resolveApiBaseUrl();
 
 export function getApiUrl(path: string): string {
   if (!path.startsWith("/")) return path;

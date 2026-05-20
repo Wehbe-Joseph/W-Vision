@@ -12,10 +12,13 @@ One Vercel project serves **both** the React app and the Express API (`/api/*` s
 | **Framework Preset** | Vite |
 | **Output Directory** | leave empty (uses `vercel.json`) |
 | **Build / Install commands** | leave empty (uses `vercel.json`) |
+| **Include files outside root directory** | **Enabled** (required for monorepo build) |
+
+The Express API is deployed via `artifacts/tourvision/server.js` (Vercel native Express entry). It is **not** a separate Railway service unless you choose that option below.
 
 If Root Directory is wrong, `/api/*` never deploys and tour generation fails.
 
-**Do not set `VITE_API_BASE_URL`** on Vercel unless you host the API on a *separate* domain. If you added it earlier (e.g. Railway), **delete it** and redeploy so requests use same-origin `/api`.
+**Delete `VITE_API_BASE_URL` on Vercel** unless you host the API on a separate live domain. If it still points at Railway or `localhost`, the browser will skip your Vercel API entirely.
 
 ---
 
@@ -86,7 +89,7 @@ See `Dockerfile` and `railway.toml` if you want the API on Railway instead. In t
 
 | Symptom | Fix |
 |---------|-----|
-| HTTP **405** / **404** on `/api/*` | Redeploy latest `main`; ensure `api/[...path].js` exists (do **not** rewrite `/api/*` to `/api`) |
+| HTTP **405** / **404** on `/api/*` | Redeploy latest `main`; confirm Root Directory is `artifacts/tourvision` and `server.js` exists; delete stale `VITE_API_BASE_URL` |
 | Apify / Gemini / World Labs never called | Open `/api/healthz/integrations` — add missing env vars on Vercel |
 | **`PUBLIC_API_BASE_URL` is localhost** | Set it to `https://YOUR-VERCEL-DOMAIN.vercel.app` on Vercel |
 | **500** on `/api/*` | Missing env vars on Vercel (check function logs) |

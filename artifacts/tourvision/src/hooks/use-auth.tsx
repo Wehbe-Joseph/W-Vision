@@ -9,6 +9,7 @@ import {
 } from "react";
 import { setAuthTokenGetter, setBaseUrl } from "@workspace/api-client-react";
 import { supabase, supabaseEnvError } from "@/lib/supabase";
+import { resolveApiBaseUrl } from "@/lib/resolve-api-base";
 import type { Session, User } from "@supabase/supabase-js";
 
 export interface AuthUser {
@@ -116,7 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [getAccessToken]);
 
   useEffect(() => {
-    const configuredApiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim();
+    const configuredApiBase = resolveApiBaseUrl();
     setBaseUrl(configuredApiBase || null);
     return () => setBaseUrl(null);
   }, []);

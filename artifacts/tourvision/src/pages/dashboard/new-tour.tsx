@@ -360,6 +360,8 @@ export default function NewTour() {
           err.status === 404 ||
           err.status === 502 ||
           err.status === 503);
+      const attemptedUrl =
+        err instanceof ApiError && err.url ? err.url : getApiUrl("/api/generate-tour");
       toast({
         title: unauthorized
           ? "Please sign in"
@@ -367,7 +369,7 @@ export default function NewTour() {
           ? "Tour limit reached"
           : "Could not start generation",
         description: apiNotReachable
-          ? "The API is not reachable. Redeploy the latest main branch on Vercel and add server env vars from artifacts/api-server/.env (see DEPLOY.md)."
+          ? `The API is not reachable (${err instanceof ApiError ? err.status : "network error"} at ${attemptedUrl}). Delete VITE_API_BASE_URL on Vercel if set, redeploy latest main, then check ${getApiUrl("/api/healthz/integrations")}.`
           : description,
         variant: "destructive",
       });

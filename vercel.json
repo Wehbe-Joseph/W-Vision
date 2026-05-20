@@ -10,11 +10,7 @@
     }
   ],
   "functions": {
-    "artifacts/tourvision/api/index.js": {
-      "maxDuration": 300,
-      "memory": 1024
-    },
-    "artifacts/tourvision/api/[...path].js": {
+    "artifacts/tourvision/server.js": {
       "maxDuration": 300,
       "memory": 1024
     }

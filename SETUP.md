@@ -30,13 +30,7 @@ pnpm dev
 
 Already populated with `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. The browser only ever sees the anon key.
 
-For production (Vercel + Railway), follow **[DEPLOY.md](./DEPLOY.md)**. You must deploy the API separately and set:
-
-```
-VITE_API_BASE_URL=https://<your-railway-api-url>
-```
-
-in Vercel environment variables (no trailing slash).
+For production on Vercel (frontend + API on same project), follow **[DEPLOY.md](./DEPLOY.md)**. Do **not** set `VITE_API_BASE_URL` unless the API runs on a separate host.
 
 ## 2. Push the database schema
 
