@@ -149,9 +149,22 @@ export default function NewTour() {
           body: JSON.stringify({ url: trimmed }),
         });
         if (!res.ok) {
-          // Unsupported platform (501) etc. — silently leave the user to
-          // upload photos manually; the input field's helper text already
-          // lists supported platforms.
+          if (res.status === 503 || res.status === 502 || res.status === 504) {
+            let detail = "Listing photo scrape is unavailable on the server.";
+            try {
+              const errBody = (await res.json()) as { error?: string };
+              if (errBody?.error) detail = errBody.error;
+            } catch {
+              /* ignore */
+            }
+            toast({
+              title: "Could not fetch listing photos",
+              description: detail.includes("APIFY")
+                ? detail
+                : `${detail} Add APIFY_TOKEN in Vercel env vars (see DEPLOY.md).`,
+              variant: "destructive",
+            });
+          }
           setApifyImageUrls([]);
           setApifyImageLabels({});
           return;

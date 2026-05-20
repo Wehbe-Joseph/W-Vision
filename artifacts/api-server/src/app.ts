@@ -8,6 +8,21 @@ import { authMiddleware } from "./middlewares/authMiddleware";
 
 const app: Express = express();
 
+// Vercel invokes `api/[...path].js` with paths like `/healthz`, not `/api/healthz`.
+// Our routers are mounted under `/api`, so normalize before routing.
+if (process.env.VERCEL) {
+  app.use((req, _res, next) => {
+    const raw = req.url ?? "/";
+    const qIndex = raw.indexOf("?");
+    const path = qIndex === -1 ? raw : raw.slice(0, qIndex);
+    const qs = qIndex === -1 ? "" : raw.slice(qIndex);
+    if (!path.startsWith("/api")) {
+      req.url = `${path === "/" ? "/api" : `/api${path.startsWith("/") ? path : `/${path}`}`}${qs}`;
+    }
+    next();
+  });
+}
+
 app.use(
   pinoHttp({
     logger,

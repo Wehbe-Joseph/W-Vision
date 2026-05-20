@@ -65,7 +65,12 @@ Supabase → **Authentication** → **URL Configuration**:
 ```bash
 curl https://YOUR-VERCEL-DOMAIN.vercel.app/api/healthz
 # {"status":"ok"}
+
+curl https://YOUR-VERCEL-DOMAIN.vercel.app/api/healthz/integrations
+# {"status":"ok","integrations":{"apify":{"configured":true},...}}
 ```
+
+If `status` is `"degraded"`, any integration with `"configured": false` is missing on Vercel. Fix env vars and redeploy.
 
 Then sign in and use **Generate 3D Tour**.
 
@@ -81,7 +86,9 @@ See `Dockerfile` and `railway.toml` if you want the API on Railway instead. In t
 
 | Symptom | Fix |
 |---------|-----|
-| HTTP **405** on Generate | Redeploy latest `main`; ensure `/api` rewrite exists in `vercel.json` |
+| HTTP **405** / **404** on `/api/*` | Redeploy latest `main`; ensure `api/[...path].js` exists (do **not** rewrite `/api/*` to `/api`) |
+| Apify / Gemini / World Labs never called | Open `/api/healthz/integrations` — add missing env vars on Vercel |
+| **`PUBLIC_API_BASE_URL` is localhost** | Set it to `https://YOUR-VERCEL-DOMAIN.vercel.app` on Vercel |
 | **500** on `/api/*` | Missing env vars on Vercel (check function logs) |
 | Generation starts then stops | Check Vercel function logs; World Labs / DB errors |
 | Build fails on `serverless.mjs` | Run `pnpm --filter @workspace/api-server build` before deploy |
