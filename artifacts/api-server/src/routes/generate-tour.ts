@@ -22,6 +22,10 @@ import {
 } from "../services/imageClassifier";
 import { queuePersistTourScenes, persistedScenesToMemScenes } from "../lib/tourScenesPersistence";
 import {
+  advanceTourGeneration,
+  saveTourSourceImages,
+} from "../lib/tourGenerationDriver";
+import {
   getMemUser,
   setMemUserTier,
   TIER_TOUR_LIMITS,
@@ -169,7 +173,7 @@ router.post("/generate-tour", async (req, res) => {
     const expiresAt = isPaidTier(userTier)
       ? null
       : Date.now() + FREE_TIER_TTL_MS;
-    createMemTour({
+    const memTour = createMemTour({
       tourId,
       userId,
       shareToken,
@@ -190,7 +194,10 @@ router.post("/generate-tour", async (req, res) => {
       frozen: false,
       createdOnTier: userTier,
       scenes: [],
+      sourceImageUrls: publicImageUrls,
     });
+
+    void saveTourSourceImages(tourId, publicImageUrls, memTour);
 
     // Store uploaded photos as tour_photos rows (thumbnail only)
     if (dbTourCreated && uploadedImages.length > 0) {
@@ -224,6 +231,16 @@ router.post("/generate-tour", async (req, res) => {
     // background — the status endpoint surfaces progress to the client.
     res.json({ tourId, shareToken });
 
+    if (process.env.VERCEL) {
+      // Serverless: no background timers — each GET /status (and this kick) advances work.
+      waitUntil(
+        advanceTourGeneration(tourId, userId, req.log).catch((err) => {
+          req.log.error({ err, tourId }, "Status-driven generation tick failed");
+        }),
+      );
+      return;
+    }
+
     const pipeline = runGenerationPipeline({
       tourId,
       userId,
@@ -234,17 +251,9 @@ router.post("/generate-tour", async (req, res) => {
       reqLog: req.log,
     });
 
-    if (process.env.VERCEL) {
-      waitUntil(
-        pipeline.catch((err) => {
-          req.log.error({ err, tourId }, "Background tour pipeline crashed");
-        }),
-      );
-    } else {
-      pipeline.catch((err) => {
-        req.log.error({ err, tourId }, "Background tour pipeline crashed");
-      });
-    }
+    pipeline.catch((err) => {
+      req.log.error({ err, tourId }, "Background tour pipeline crashed");
+    });
     return;
   } catch (err) {
     req.log.error(err);
@@ -259,6 +268,12 @@ router.get("/generate-tour/:tourId/status", async (req, res) => {
     (req.user as { id?: string } | undefined)?.id ??
     (req.headers["x-user-id"] as string | undefined);
   if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+  try {
+    await advanceTourGeneration(req.params.tourId, userId, req.log);
+  } catch (err) {
+    req.log.warn({ err, tourId: req.params.tourId }, "Status-driven generation tick failed");
+  }
 
   const stageLabels: Record<string, string> = {
     queued: "Queued for generation…",

@@ -314,8 +314,21 @@ export function schedulePoll(
   operationId: string,
   startedAt: Date,
 ) {
+  if (process.env.VERCEL) {
+    // Serverless: status polls drive advancement — no background timers.
+    return;
+  }
   if (activePollTimers.has(tourId)) return;
   doSchedule(tourId, operationId, startedAt);
+}
+
+/** Run one World Labs poll cycle (used by status-driven generation on Vercel). */
+export async function pollOperationNow(
+  pollKey: string,
+  operationId: string,
+  startedAt: Date,
+): Promise<void> {
+  await pollTour(pollKey, operationId, startedAt);
 }
 
 function doSchedule(tourId: string, operationId: string, startedAt: Date) {
@@ -635,7 +648,9 @@ async function pollTour(
       );
     }
 
-    doSchedule(pollKey, operationId, startedAt);
+    if (!process.env.VERCEL) {
+      doSchedule(pollKey, operationId, startedAt);
+    }
   } catch (err) {
     logger.error({ err, tourId, sceneId, operationId }, "WorldLabs poll request failed");
 
@@ -678,7 +693,9 @@ async function pollTour(
       );
     }
 
-    doSchedule(pollKey, operationId, startedAt);
+    if (!process.env.VERCEL) {
+      doSchedule(pollKey, operationId, startedAt);
+    }
   }
 }
 

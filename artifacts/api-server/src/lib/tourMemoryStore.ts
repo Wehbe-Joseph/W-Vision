@@ -65,6 +65,8 @@ export interface MemTour {
   createdOnTier: "free" | "pro" | "unlimited";
   /** One Marble world per room (filled after Gemini classification). */
   scenes: MemScene[];
+  /** Original listing/upload URLs used to start generation (persisted for serverless resume). */
+  sourceImageUrls?: string[];
 }
 
 const TOURS = new Map<string, MemTour>();

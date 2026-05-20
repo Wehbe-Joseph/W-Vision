@@ -40,6 +40,7 @@ In [Vercel](https://vercel.com) → your project → **Settings** → **Environm
 | `SUPABASE_SERVICE_ROLE_KEY` | Yes |
 | `WORLD_LABS_API_KEY` | Yes (for 3D generation) |
 | `APIFY_TOKEN` | Yes (for listing scrape) |
+| `GEMINI_API_KEY` | Yes (for room classification) |
 | `PUBLIC_API_BASE_URL` | Yes — set to `https://YOUR-VERCEL-DOMAIN.vercel.app` (no trailing slash) |
 | `RESEND_API_KEY` | Optional |
 | `WORLD_LABS_ENABLED` | Optional (`true` / `false`) |

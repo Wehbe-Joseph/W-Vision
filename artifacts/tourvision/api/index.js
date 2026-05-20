@@ -5,6 +5,6 @@ import app from "./serverless.mjs";
 export default app;
 
 export const config = {
-  maxDuration: 60,
+  maxDuration: 300,
   memory: 1024,
 };
