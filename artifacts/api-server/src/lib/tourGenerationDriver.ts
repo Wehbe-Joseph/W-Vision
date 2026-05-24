@@ -1,7 +1,6 @@
 import { db } from "@workspace/db";
 import { toursTable, profilesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { createWorld, pollOperationNow } from "./worldlabs";
 import {
   classifyListingImages,
   groupClassificationsIntoScenes,
@@ -80,8 +79,8 @@ export async function hydrateMemTourFromDb(
     listingUrl: tour.listingUrl,
     listingAddress: tour.listingAddress ?? tour.listingUrl,
     listingPlatform: tour.listingPlatform ?? "other",
-    operationId: tour.worldlabsJobId,
-    worldId: tour.worldlabsJobId,
+    operationId: null,
+    worldId: null,
     generationStatus,
     currentStage: tour.currentStage ?? "Restored from database…",
     generatedTourUrl: tour.generatedTourUrl,
@@ -116,6 +115,28 @@ async function persistSourceImageUrls(
   }
 }
 
+/** Mark unlocked scenes complete with photo thumbnails (no external 3D provider). */
+export function finalizePhotoTourScenes(tourId: string): void {
+  const mem = getMemTour(tourId);
+  if (!mem) return;
+
+  for (const scene of mem.scenes) {
+    if (scene.locked) continue;
+    updateMemScene(tourId, scene.id, {
+      generationStatus: "completed",
+      generatedTourUrl: null,
+      operationId: null,
+      errorMessage: null,
+    });
+  }
+
+  mem.currentStage = "Tour ready";
+  mem.generationStatus = "completed";
+  if (!mem.completedAt) mem.completedAt = Date.now();
+  rollupMemTourFromScenes(tourId);
+  queuePersistTourScenes(tourId);
+}
+
 async function buildScenesFromImages(
   tourId: string,
   imageUrls: string[],
@@ -139,7 +160,7 @@ async function buildScenesFromImages(
   const groups = groupClassificationsIntoScenes(classifications);
   if (groups.length === 0) {
     mem.generationStatus = "failed";
-    mem.errorMessage = "Couldn't classify any photos for 3D generation";
+    mem.errorMessage = "Couldn't classify any photos for tour generation";
     queuePersistTourScenes(tourId);
     return false;
   }
@@ -160,57 +181,14 @@ async function buildScenesFromImages(
   }));
 
   mem.scenes = scenes;
-  mem.currentStage =
-    scenes.some((s) => s.locked)
-      ? `Building 1 of ${scenes.length} rooms (free tier)…`
-      : `Building ${scenes.length} 3D environment${scenes.length === 1 ? "" : "s"}…`;
+  mem.currentStage = "Organizing rooms…";
   mem.previewImageUrl = scenes[0]?.thumbnailUrl ?? null;
   mem.generationStatus = "processing";
   queuePersistTourScenes(tourId);
+
+  finalizePhotoTourScenes(tourId);
+  reqLog.info({ tourId, sceneCount: scenes.length }, "Photo tour scenes ready");
   return true;
-}
-
-async function dispatchNextScene(
-  tourId: string,
-  processingStartedAt: Date,
-  reqLog: ReqLog,
-): Promise<void> {
-  const mem = getMemTour(tourId);
-  if (!mem) return;
-
-  const pending = mem.scenes.find(
-    (s) => !s.locked && !s.operationId && s.generationStatus === "queued",
-  );
-  if (!pending) return;
-
-  try {
-    const result = await createWorld(pending.imageUrls[0] ?? pending.thumbnailUrl);
-    updateMemScene(tourId, pending.id, {
-      operationId: result.operationId,
-      generationStatus: "processing",
-    });
-    rollupMemTourFromScenes(tourId);
-    queuePersistTourScenes(tourId);
-    reqLog.info(
-      { tourId, sceneId: pending.id, operationId: result.operationId },
-      "WorldLabs generation started (status-driven)",
-    );
-
-    await pollOperationNow(
-      `${tourId}::${pending.id}`,
-      result.operationId,
-      processingStartedAt,
-    );
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    reqLog.warn({ err, tourId, sceneId: pending.id }, "Marble dispatch failed");
-    updateMemScene(tourId, pending.id, {
-      generationStatus: "failed",
-      errorMessage: message,
-    });
-    rollupMemTourFromScenes(tourId);
-    queuePersistTourScenes(tourId);
-  }
 }
 
 /**
@@ -228,14 +206,6 @@ export async function advanceTourGeneration(
     return;
   }
 
-  let startedAt = new Date(mem.createdAt);
-  try {
-    const tour = await loadTourRow(tourId);
-    if (tour?.processingStartedAt) startedAt = tour.processingStartedAt;
-  } catch {
-    /* use mem.createdAt */
-  }
-
   const imageUrls =
     mem.sourceImageUrls?.length
       ? mem.sourceImageUrls
@@ -243,28 +213,18 @@ export async function advanceTourGeneration(
 
   if (mem.scenes.length === 0 && imageUrls.length > 0) {
     await buildScenesFromImages(tourId, imageUrls, mem.createdOnTier, reqLog);
+    return;
   }
 
   const refreshed = getMemTour(tourId);
   if (!refreshed || refreshed.scenes.length === 0) return;
 
-  // Poll every in-flight Marble operation once per status request.
-  for (const scene of refreshed.scenes) {
-    if (!scene.operationId) continue;
-    if (scene.generationStatus === "completed" || scene.generationStatus === "failed") {
-      continue;
-    }
-    await pollOperationNow(
-      `${tourId}::${scene.id}`,
-      scene.operationId,
-      startedAt,
-    );
+  const needsFinalize = refreshed.scenes.some(
+    (s) => !s.locked && s.generationStatus !== "completed",
+  );
+  if (needsFinalize) {
+    finalizePhotoTourScenes(tourId);
   }
-
-  const afterPoll = getMemTour(tourId);
-  if (!afterPoll || afterPoll.generationStatus === "completed") return;
-
-  await dispatchNextScene(tourId, startedAt, reqLog);
 }
 
 export async function saveTourSourceImages(

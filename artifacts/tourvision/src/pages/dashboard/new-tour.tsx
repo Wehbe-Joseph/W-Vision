@@ -60,8 +60,8 @@ const WORK_STAGES = [
   { label: "Analyzing your photos",   icon: Scan },
   { label: "Detecting rooms",         icon: Home },
   { label: "Mapping spatial layout",  icon: Layers },
-  { label: "Building the 3D mesh",    icon: Globe },
-  { label: "Adding textures & light", icon: Palette },
+  { label: "Selecting best photos",   icon: Globe },
+  { label: "Organizing your tour",    icon: Palette },
   { label: "Polishing your tour",     icon: Sparkles },
 ] as const;
 
@@ -799,7 +799,7 @@ export default function NewTour() {
                           </div>
                         </div>
                         <p className="text-xs font-mono uppercase tracking-widest opacity-80">
-                          Building your 3D world…
+                          Organizing your tour…
                         </p>
                       </div>
                     </div>
@@ -960,7 +960,7 @@ export default function NewTour() {
                 <CheckCircle2 className="w-8 h-8 text-primary" />
               </div>
               <h2 className="text-3xl font-display font-bold mb-1">Tour Ready!</h2>
-              <p className="text-muted-foreground text-sm">Your 3D world has been generated</p>
+              <p className="text-muted-foreground text-sm">Your virtual tour is ready</p>
             </div>
 
             <div className="p-6 grid sm:grid-cols-2 gap-6">

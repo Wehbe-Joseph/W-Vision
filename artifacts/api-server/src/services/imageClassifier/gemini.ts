@@ -5,8 +5,7 @@ import { logger } from "../../lib/logger";
  *
  * The classifier scores each photo on room type, photo quality, "wow" factor,
  * and whether it's a good candidate for 3D world generation. Results group
- * naturally by `roomType`, which the tour pipeline uses to dispatch one
- * Marble world per room.
+ * naturally by `roomType`, which the tour pipeline uses to group photos per room.
  *
  * Resilience model:
  *   - One bad image never breaks the batch — failures are logged and skipped.
@@ -54,7 +53,7 @@ export interface ImageClassification {
   isInterior: boolean;
   isWideAngle: boolean;
   recommendedFor3d: boolean;
-  /** Set when this photo is the single Marble input for its room group. */
+  /** Set when this photo is the best pick for its room group. */
   isBestInRoom?: boolean;
   /** Set when classification fell back to a heuristic / synthetic label. */
   fallback?: boolean;

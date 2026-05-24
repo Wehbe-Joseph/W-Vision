@@ -4,7 +4,6 @@ import { db } from "@workspace/db";
 import { toursTable, profilesTable, tourPhotosTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { randomBytes } from "crypto";
-import { createWorld, schedulePoll } from "../lib/worldlabs";
 import { uploadDataUrlToStorage } from "../lib/imageStorage";
 import {
   createMemTour,
@@ -24,6 +23,7 @@ import { queuePersistTourScenes, persistedScenesToMemScenes } from "../lib/tourS
 import {
   advanceTourGeneration,
   saveTourSourceImages,
+  finalizePhotoTourScenes,
 } from "../lib/tourGenerationDriver";
 import {
   getMemUser,
@@ -111,8 +111,7 @@ router.post("/generate-tour", async (req, res) => {
     // Build the final image URL list
     const allImageUrls = [...imageUrls];
 
-    // Convert any inline base64 uploaded images into Supabase Storage URLs
-    // so WorldLabs can fetch them publicly.
+    // Convert any inline base64 uploaded images into Supabase Storage URLs.
     const uploadedPublicUrls: string[] = (
       await Promise.all(
         uploadedImages
@@ -121,7 +120,7 @@ router.post("/generate-tour", async (req, res) => {
       )
     ).filter((url): url is string => !!url);
 
-    // Only keep https/public URLs — WorldLabs cannot fetch http/localhost.
+    // Only keep https/public URLs for classification and photo tours.
     const publicImageUrls = [
       ...allImageUrls.filter((u) => u.startsWith("https://")),
       ...uploadedPublicUrls,
@@ -226,9 +225,7 @@ router.post("/generate-tour", async (req, res) => {
 
     // ── Respond IMMEDIATELY ──────────────────────────────────────────────
     //
-    // Gemini classification + Marble dispatch can take 30s+; we don't want
-    // the frontend's POST to hang that long. Kick off the pipeline in the
-    // background — the status endpoint surfaces progress to the client.
+    // Gemini classification can take 30s+; respond immediately and advance on status polls.
     res.json({ tourId, shareToken });
 
     if (process.env.VERCEL) {
@@ -277,7 +274,7 @@ router.get("/generate-tour/:tourId/status", async (req, res) => {
 
   const stageLabels: Record<string, string> = {
     queued: "Queued for generation…",
-    processing: "Building your 3D world…",
+    processing: "Organizing your tour…",
     completed: "Tour ready!",
     failed: "Generation failed",
   };
@@ -319,7 +316,7 @@ router.get("/generate-tour/:tourId/status", async (req, res) => {
         stageLabels[tour.generationStatus ?? "queued"],
       estimatedMinutes:
         estimatedMinutes[mem?.generationStatus ?? tour.generationStatus ?? "queued"] ?? 3,
-      worldlabsJobId: tour.worldlabsJobId,
+      worldlabsJobId: null,
       generatedTourUrl: mem?.generatedTourUrl ?? tour.generatedTourUrl,
       previewImageUrl:
         mem?.previewImageUrl ?? tour.previewImageUrl ?? tour.thumbnailUrl,
@@ -339,7 +336,7 @@ router.get("/generate-tour/:tourId/status", async (req, res) => {
     generationStatus: mem.generationStatus,
     currentStage: mem.currentStage ?? stageLabels[mem.generationStatus],
     estimatedMinutes: estimatedMinutes[mem.generationStatus] ?? 3,
-    worldlabsJobId: mem.worldId ?? mem.operationId,
+    worldlabsJobId: null,
     generatedTourUrl: mem.generatedTourUrl,
     previewImageUrl: mem.previewImageUrl,
     errorMessage: mem.errorMessage,
@@ -461,8 +458,7 @@ router.post("/generate-tour/:tourId/resume", async (req, res) => {
     return res.json({ success: true, resumed: 0, message: "Nothing to resume." });
   }
 
-  // Flip the flag immediately so the UI can show "queued for generation"
-  // for the locked rooms while Marble works through them.
+  // Flip the flag immediately so the UI can show progress for unlocked rooms.
   for (const scene of lockedScenes) {
     updateMemScene(req.params.tourId, scene.id, {
       locked: false,
@@ -480,90 +476,35 @@ router.post("/generate-tour/:tourId/resume", async (req, res) => {
   rollupMemTourFromScenes(req.params.tourId);
   queuePersistTourScenes(req.params.tourId);
 
-  // Respond fast — Marble dispatch happens in the background, the status
-  // endpoint surfaces progress as usual.
+  // Respond fast — scene finalization runs in the background.
   res.json({
     success: true,
     resumed: lockedScenes.length,
-    message: `Building ${lockedScenes.length} more room${
+    message: `Unlocking ${lockedScenes.length} more room${
       lockedScenes.length === 1 ? "" : "s"
-    } in 3D…`,
+    }…`,
   });
 
   void resumeLockedScenes({
     tourId: req.params.tourId,
-    sceneIds: lockedScenes.map((s) => s.id),
-    processingStartedAt: new Date(),
-    reqLog: req.log,
   });
   return;
 });
 
-async function resumeLockedScenes(opts: {
-  tourId: string;
-  sceneIds: string[];
-  processingStartedAt: Date;
-  reqLog: { info: Function; warn: Function; error: Function };
-}): Promise<void> {
-  const { tourId, sceneIds, processingStartedAt, reqLog } = opts;
-  const RATE_LIMIT_GAP_MS = 1500;
+async function resumeLockedScenes(opts: { tourId: string }): Promise<void> {
+  const { tourId } = opts;
+  const mem = getMemTour(tourId);
+  if (!mem) return;
 
-  for (const sceneId of sceneIds) {
-    const mem = getMemTour(tourId);
-    const scene = mem?.scenes.find((s) => s.id === sceneId);
-    if (!scene) continue;
-
-    let attempt = 0;
-    let lastErr: unknown = null;
-    while (attempt < 4) {
-      try {
-        const result = await createWorld(scene.imageUrls[0] ?? scene.thumbnailUrl);
-        updateMemScene(tourId, scene.id, {
-          operationId: result.operationId,
-          generationStatus: "processing",
-        });
-        schedulePoll(
-          `${tourId}::${scene.id}`,
-          result.operationId,
-          processingStartedAt,
-        );
-        reqLog.info(
-          { tourId, sceneId: scene.id, operationId: result.operationId },
-          "WorldLabs generation started (resumed)",
-        );
-        lastErr = null;
-        break;
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        lastErr = err;
-        if (/\b429\b|rate limit/i.test(message)) {
-          const wait = 2000 * Math.pow(2, attempt);
-          reqLog.warn(
-            { tourId, sceneId: scene.id, attempt, wait },
-            "Marble rate-limited on resume — backing off",
-          );
-          await new Promise((r) => setTimeout(r, wait));
-          attempt += 1;
-          continue;
-        }
-        break;
-      }
-    }
-    if (lastErr) {
-      const message = lastErr instanceof Error ? lastErr.message : String(lastErr);
-      reqLog.warn(
-        { err: lastErr, tourId, sceneId: scene.id },
-        "Marble dispatch failed on resume",
-      );
-      updateMemScene(tourId, scene.id, {
-        generationStatus: "failed",
-        errorMessage: message,
-      });
-    }
-    await new Promise((r) => setTimeout(r, RATE_LIMIT_GAP_MS));
+  for (const scene of mem.scenes) {
+    if (!scene.locked) continue;
+    updateMemScene(tourId, scene.id, {
+      locked: false,
+      generationStatus: "queued",
+      errorMessage: null,
+    });
   }
-  rollupMemTourFromScenes(tourId);
-  queuePersistTourScenes(tourId);
+  finalizePhotoTourScenes(tourId);
 }
 
 // ─── Background pipeline ──────────────────────────────────────────────────────
@@ -579,15 +520,11 @@ interface PipelineCtx {
 }
 
 /**
- * Full generation pipeline: Gemini classification → group by room → one
- * Marble world per room. Each scene polls independently; the parent tour
- * status is rolled up from its scenes.
+ * Tour pipeline: Gemini classification → group by room → photo tour ready.
  */
 async function runGenerationPipeline(ctx: PipelineCtx): Promise<void> {
-  const { tourId, userId, dbTourCreated, imageUrls, processingStartedAt, userTier, reqLog } =
-    ctx;
+  const { tourId, userId, dbTourCreated, imageUrls, userTier, reqLog } = ctx;
 
-  // 1. Classify every image with Gemini (batches of 5, never throws).
   const memBefore = getMemTour(tourId);
   if (memBefore) {
     memBefore.currentStage = "Analyzing photos with AI…";
@@ -604,19 +541,16 @@ async function runGenerationPipeline(ctx: PipelineCtx): Promise<void> {
     },
   });
 
-  // 2. Group into scenes (one per detected room type).
   const groups = groupClassificationsIntoScenes(classifications);
   if (groups.length === 0) {
     const m = getMemTour(tourId);
     if (m) {
       m.generationStatus = "failed";
-      m.errorMessage = "Couldn't classify any photos for 3D generation";
+      m.errorMessage = "Couldn't classify any photos for tour generation";
     }
     return;
   }
 
-  // Free tier: classify everything, but only generate ONE world.
-  // The other scenes are stored as `locked` and resumed after upgrade.
   const isFree = !isPaidTier(userTier);
   const scenes: MemScene[] = groups.map((g, idx) => ({
     id: g.id,
@@ -632,18 +566,15 @@ async function runGenerationPipeline(ctx: PipelineCtx): Promise<void> {
     locked: isFree && idx > 0,
   }));
 
-  const dispatchableCount = scenes.filter((s) => !s.locked).length;
-  const lockedCount = scenes.length - dispatchableCount;
+  const lockedCount = scenes.filter((s) => s.locked).length;
 
   const memAfter = getMemTour(tourId);
   if (memAfter) {
     memAfter.scenes = scenes;
     memAfter.currentStage =
       lockedCount > 0
-        ? `Building 1 of ${scenes.length} rooms (free tier) — upgrade to unlock the rest…`
-        : `Building ${scenes.length} 3D environment${
-            scenes.length === 1 ? "" : "s"
-          }…`;
+        ? `Organizing 1 of ${scenes.length} rooms (free tier)…`
+        : `Organizing ${scenes.length} room${scenes.length === 1 ? "" : "s"}…`;
     memAfter.previewImageUrl = scenes[0]?.thumbnailUrl ?? null;
     memAfter.generationStatus = "processing";
   }
@@ -661,73 +592,8 @@ async function runGenerationPipeline(ctx: PipelineCtx): Promise<void> {
     "Created scenes",
   );
 
-  // Dispatch sequentially with backoff so we don't trip Marble's per-second
-  // rate limit (~1 RPS on the standard tier). Each scene goes one-at-a-time
-  // and retries up to 3 times on 429. Locked scenes (free tier) are skipped.
-  const RATE_LIMIT_GAP_MS = 1500;
-  for (const scene of scenes) {
-    if (scene.locked) {
-      reqLog.info(
-        { tourId, sceneId: scene.id, label: scene.label },
-        "Scene locked behind upgrade — skipping Marble dispatch",
-      );
-      continue;
-    }
-    let attempt = 0;
-    let lastErr: unknown = null;
-    while (attempt < 4) {
-      try {
-        const result = await createWorld(scene.imageUrls[0] ?? scene.thumbnailUrl);
-        updateMemScene(tourId, scene.id, {
-          operationId: result.operationId,
-          generationStatus: "processing",
-        });
-        schedulePoll(
-          `${tourId}::${scene.id}`,
-          result.operationId,
-          processingStartedAt,
-        );
-        reqLog.info(
-          { tourId, sceneId: scene.id, operationId: result.operationId },
-          "WorldLabs generation started",
-        );
-        lastErr = null;
-        break;
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        lastErr = err;
-        if (/\b429\b|rate limit/i.test(message)) {
-          const wait = 2000 * Math.pow(2, attempt);
-          reqLog.warn(
-            { tourId, sceneId: scene.id, attempt, wait },
-            "Marble rate-limited — backing off",
-          );
-          await new Promise((r) => setTimeout(r, wait));
-          attempt += 1;
-          continue;
-        }
-        // Non-rate-limit error → give up on this scene.
-        break;
-      }
-    }
-    if (lastErr) {
-      const message = lastErr instanceof Error ? lastErr.message : String(lastErr);
-      reqLog.warn(
-        { err: lastErr, tourId, sceneId: scene.id },
-        "Marble dispatch failed after retries",
-      );
-      updateMemScene(tourId, scene.id, {
-        generationStatus: "failed",
-        errorMessage: message,
-      });
-    }
-    // Brief pause between scenes to stay well under the rate limit.
-    await new Promise((r) => setTimeout(r, RATE_LIMIT_GAP_MS));
-  }
-  rollupMemTourFromScenes(tourId);
-  queuePersistTourScenes(tourId);
+  finalizePhotoTourScenes(tourId);
 
-  // 4. Bump usage counters (best-effort).
   if (dbTourCreated) {
     try {
       await db
@@ -764,8 +630,6 @@ async function simulateTourProcessing(tourId: string, userId: string) {
     isBestForRoom: true,
     isAiGenerated: !r.isReal,
     confidenceScore: r.confidence,
-    marbleWorldId: `world_${tourId}_${i}`,
-    marbleEmbedUrl: null as string | null,
     thumbnailUrl: `https://images.unsplash.com/photo-${1560000000 + i * 100000}?w=400&q=60`,
   }));
 

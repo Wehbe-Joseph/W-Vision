@@ -19,7 +19,6 @@ import Settings from "@/pages/dashboard/settings";
 import Billing from "@/pages/dashboard/billing";
 import ListingImport from "@/pages/dashboard/listing-import";
 import TourViewer from "@/pages/tour-viewer";
-import TestSpark from "@/pages/test-spark";
 import { hasPendingTour } from "@/hooks/use-pending-tour";
 
 const queryClient = new QueryClient();
@@ -94,7 +93,6 @@ function Router() {
         <Route path="/dashboard/billing" component={() => <ProtectedRoute component={Billing} />} />
         <Route path="/dashboard/settings" component={() => <ProtectedRoute component={Settings} />} />
         <Route path="/tour/:shareToken" component={() => <PublicRoute component={TourViewer} />} />
-        <Route path="/test-spark" component={() => <PublicRoute component={TestSpark} />} />
         <Route component={NotFound} />
       </Switch>
     </>

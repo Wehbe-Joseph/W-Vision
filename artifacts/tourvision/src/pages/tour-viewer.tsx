@@ -3,7 +3,6 @@ import { useLocation, useParams } from "wouter";
 import { AnimatePresence, motion } from "framer-motion";
 import { Loader2, Menu, Share2, X } from "lucide-react";
 import { ApiError, useGetPublicTour } from "@workspace/api-client-react";
-import SparkViewer from "@/components/tour/SparkViewer";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import WVisionLogo from "@/components/WVisionLogo";
@@ -13,6 +12,7 @@ interface SceneExtra {
   id: string;
   label: string;
   roomType: string;
+  thumbnailUrl?: string | null;
   generationStatus: "queued" | "processing" | "completed" | "failed";
   generatedTourUrl: string | null;
   worldEmbedUrl?: string | null;
@@ -22,8 +22,8 @@ interface TourRoom {
   id: string;
   roomLabel?: string | null;
   floorNumber?: number | null;
+  thumbnailUrl?: string | null;
   worldEmbedUrl?: string | null;
-  marbleEmbedUrl?: string | null;
   qualityScore?: number | null;
   confidenceScore?: number | null;
 }
@@ -35,6 +35,7 @@ interface PublicTourLike {
   status?: string | null;
   generationStatus?: string | null;
   isFullHouse?: boolean;
+  previewImageUrl?: string | null;
   generatedTourUrl?: string | null;
   scenes?: SceneExtra[];
   rooms?: TourRoom[];
@@ -44,14 +45,13 @@ interface ViewerRoom {
   id: string;
   label: string;
   floor: number;
-  splatUrl: string | null;
+  thumbnailUrl: string | null;
   ready: boolean;
   rank: number;
 }
 
-function isSplatUrl(url: string | null | undefined): url is string {
-  if (!url) return false;
-  return /\.spz(\?|$)/i.test(url) || /\.rad(\?|$)/i.test(url);
+function isPhotoUrl(url: string | null | undefined): url is string {
+  return !!url && (url.startsWith("http") || url.startsWith("data:"));
 }
 
 export default function TourViewer() {
@@ -74,16 +74,16 @@ export default function TourViewer() {
     if (tour.scenes && tour.scenes.length > 0) {
       return tour.scenes
         .map((s) => {
-        const splatUrl = s.generatedTourUrl ?? s.worldEmbedUrl ?? null;
+        const thumbnailUrl = s.thumbnailUrl ?? null;
         return {
           id: s.id,
           label: s.label,
           floor: 1,
-          splatUrl,
-          ready: s.generationStatus === "completed" && isSplatUrl(splatUrl),
+          thumbnailUrl,
+          ready: s.generationStatus === "completed" && isPhotoUrl(thumbnailUrl),
           rank:
             s.generationStatus === "completed"
-              ? 200 + (s.generatedTourUrl ? 10 : 0)
+              ? 200
               : s.generationStatus === "processing"
                 ? 100
                 : 0,
@@ -93,15 +93,15 @@ export default function TourViewer() {
     }
     return (tour.rooms ?? [])
       .map((r) => {
-        const splatUrl = r.worldEmbedUrl ?? r.marbleEmbedUrl ?? null;
+        const thumbnailUrl = r.thumbnailUrl ?? r.worldEmbedUrl ?? null;
         const quality = r.qualityScore ?? 0;
         const confidence = r.confidenceScore ?? 0;
         return {
           id: r.id,
           label: r.roomLabel ?? "Room",
           floor: r.floorNumber ?? 1,
-          splatUrl,
-          ready: isSplatUrl(splatUrl),
+          thumbnailUrl,
+          ready: isPhotoUrl(thumbnailUrl),
           rank: quality * 100 + confidence,
         };
       })
@@ -128,8 +128,10 @@ export default function TourViewer() {
     rooms[0] ??
     null;
 
-  const fallbackSplat = tour?.generatedTourUrl ?? null;
-  const splatUrl = activeRoom?.splatUrl ?? fallbackSplat ?? null;
+  const photoUrl =
+    activeRoom?.thumbnailUrl ??
+    tour?.previewImageUrl ??
+    null;
 
   const isFullHouse =
     Boolean(tour?.isFullHouse) ||
@@ -294,25 +296,34 @@ export default function TourViewer() {
   }
 
   const generating =
-    !splatUrl ||
-    tour.status === "processing" ||
     tour.generationStatus === "processing" ||
-    tour.generationStatus === "queued";
+    tour.generationStatus === "queued" ||
+    tour.status === "processing";
 
   return (
     <div className="fixed inset-0 bg-[#080808] text-white overflow-hidden">
       <div className="absolute inset-0 z-0">
-        {!generating ? (
-          <SparkViewer splatUrl={splatUrl} />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
+        {!generating && isPhotoUrl(photoUrl) ? (
+          <motion.div className="w-full h-full flex items-center justify-center bg-black">
+            <img
+              src={photoUrl}
+              alt={activeRoom?.label ?? "Room photo"}
+              className="max-w-full max-h-full object-contain"
+            />
+          </motion.div>
+        ) : generating ? (
+          <motion.div className="w-full h-full flex items-center justify-center">
             <div className="flex flex-col items-center gap-3 rounded-xl bg-black/50 border border-white/10 px-6 py-5">
               <Loader2 className="w-6 h-6 animate-spin text-white/80" />
               <p className="text-sm text-white/70">
                 Tour is still being generated
               </p>
             </div>
-          </div>
+          </motion.div>
+        ) : (
+          <motion.div className="w-full h-full flex items-center justify-center">
+            <p className="text-sm text-white/60">No room photos available yet.</p>
+          </motion.div>
         )}
       </div>
 
@@ -503,7 +514,7 @@ export default function TourViewer() {
             exit={{ opacity: 0, y: 8 }}
             className="fixed z-20 left-1/2 -translate-x-1/2 bottom-6 bg-black/65 border border-white/15 rounded-full px-4 py-2 text-xs text-white/90 pointer-events-none text-center"
           >
-            Click to explore · WASD to move · Mouse to look around
+            Tap a room to preview photos
           </motion.div>
         )}
       </AnimatePresence>

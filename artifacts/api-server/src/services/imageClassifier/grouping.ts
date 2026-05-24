@@ -1,8 +1,7 @@
 import { type ImageClassification } from "./gemini";
 
 /**
- * One walkable 3D room in the tour. Marble gets exactly ONE photo —
- * the best-ranked image in this room group.
+ * One room in the tour. Each group keeps the single best photo for display.
  */
 export interface SceneGroup {
   /** Stable identifier within a tour, e.g. "living-room" or "master-bedroom". */
@@ -12,11 +11,11 @@ export interface SceneGroup {
   roomType: ImageClassification["roomType"];
   /** Best photo (sidebar thumbnail). Same as `worldImageUrl`. */
   thumbnailUrl: string;
-  /** Single photo sent to World Labs Marble for this room. */
+  /** Best photo URL for this room. */
   worldImageUrl: string;
   /** Gemini classifications for all photos in this room (debug / UI). */
   classifications: ImageClassification[];
-  /** True when the selected photo passed Gemini's 3D filter. */
+  /** True when the selected photo passed Gemini's quality filter. */
   recommendedFor3d: boolean;
 }
 
@@ -42,7 +41,7 @@ function slugify(label: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-/** Highest quality + wow score wins; prefer photos flagged for 3D. */
+/** Highest quality + wow score wins; prefer photos flagged for tour use. */
 export function selectBestPhotoForRoom(
   items: ImageClassification[],
 ): ImageClassification | null {

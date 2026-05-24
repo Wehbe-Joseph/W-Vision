@@ -75,8 +75,5 @@
     "wouter": "^3.3.5",
     "zod": "catalog:"
   },
-  "dependencies": {
-    "@sparkjsdev/spark": "^2.0.0",
-    "three": "0.180.0"
-  }
+  "dependencies": {}
 }

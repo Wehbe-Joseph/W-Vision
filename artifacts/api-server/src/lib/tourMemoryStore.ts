@@ -3,20 +3,15 @@
  *
  * This is intentionally a parallel store to the `tours` Postgres table — when
  * the DB is unreachable (wrong region, paused project, network blip…), the
- * generation flow still works end-to-end: we create a tour id, kick off the
- * Marble operation, and let the frontend poll the status endpoint backed by
- * this map. The DB is best-effort.
- *
- * State here is process-local and lives until the api-server restarts. That's
- * acceptable for the generation lifecycle — Marble completes in ~5 minutes.
+ * generation flow still works end-to-end: we create a tour id, classify photos,
+ * and let the frontend poll the status endpoint backed by this map.
  */
 
 export type MemGenerationStatus = "queued" | "processing" | "completed" | "failed";
 
 /**
- * One walkable 3D space within a tour — typically a single room from the
- * listing (Living Room, Master Bedroom, …). Each scene maps to one Marble
- * world generation, so the sidebar in the viewer can switch between rooms.
+ * One room in the tour (Living Room, Master Bedroom, …). Each scene stores
+ * the best photo thumbnail for that room.
  */
 export interface MemScene {
   id: string;
@@ -30,10 +25,7 @@ export interface MemScene {
   generatedTourUrl: string | null;
   errorMessage: string | null;
   /**
-   * True when this scene has been classified but Marble generation was
-   * deliberately deferred (free tier only gets one world). Once the user
-   * upgrades, `/api/generate-tour/:tourId/resume` flips this off and kicks
-   * off the Marble call for the room.
+   * True when this scene is locked behind the free tier until upgrade.
    */
   locked: boolean;
 }
@@ -63,7 +55,7 @@ export interface MemTour {
   frozen: boolean;
   /** Tier at the time the tour was created — used to render the upgrade CTA. */
   createdOnTier: "free" | "pro" | "unlimited";
-  /** One Marble world per room (filled after Gemini classification). */
+  /** One scene per room (filled after Gemini classification). */
   scenes: MemScene[];
   /** Original listing/upload URLs used to start generation (persisted for serverless resume). */
   sourceImageUrls?: string[];
@@ -161,13 +153,15 @@ export function rollupMemTourFromScenes(tourId: string): MemTour | undefined {
   tour.generationStatus = next;
   if (next === "completed" && !tour.completedAt) tour.completedAt = Date.now();
 
-  const firstReady = tour.scenes.find(
-    (s) => s.generationStatus === "completed" && isSpzAssetUrl(s.generatedTourUrl),
-  );
+  const firstReady = tour.scenes.find((s) => s.generationStatus === "completed");
   if (firstReady) {
-    tour.generatedTourUrl = firstReady.generatedTourUrl;
-    tour.worldId = firstReady.worldId ?? tour.worldId;
-    tour.previewImageUrl = tour.previewImageUrl ?? firstReady.thumbnailUrl;
+    tour.generatedTourUrl = isSpzAssetUrl(firstReady.generatedTourUrl)
+      ? firstReady.generatedTourUrl
+      : null;
+    tour.previewImageUrl = firstReady.thumbnailUrl ?? tour.previewImageUrl;
+  }
+  if (next === "completed") {
+    tour.currentStage = "Tour ready";
   }
   tour.updatedAt = Date.now();
   return tour;

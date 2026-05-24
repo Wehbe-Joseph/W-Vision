@@ -18,9 +18,6 @@ const apiTarget = process.env.VITE_API_PROXY_TARGET ?? "http://localhost:8080";
 
 export default defineConfig({
   base: basePath,
-  optimizeDeps: {
-    include: ["three", "@sparkjsdev/spark"],
-  },
   plugins: [
     react(),
     tailwindcss(),

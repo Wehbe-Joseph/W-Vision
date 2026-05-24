@@ -6,7 +6,7 @@ function isLocalhostUrl(value: string): boolean {
 }
 
 /**
- * Public origin for URLs handed to World Labs and in-memory image fallbacks.
+ * Public origin for uploaded image URLs and in-memory image fallbacks.
  *
  * Priority:
  * 1. PUBLIC_API_BASE_URL (when not localhost)

@@ -430,7 +430,7 @@ export default function Landing() {
               },
               {
                 num: "02", title: "AI Processes",
-                desc: "Our spatial AI extracts room geometry, classifies surfaces, and builds a full 3D world mesh.",
+                desc: "Our AI classifies your listing photos and organizes them into a room-by-room virtual tour.",
                 accent: "bg-[#FFD000]",
               },
               {

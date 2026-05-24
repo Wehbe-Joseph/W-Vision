@@ -1,6 +1,5 @@
 import { Router, type IRouter } from "express";
 import { HealthCheckResponse } from "@workspace/api-zod";
-import { isWorldLabsEnabled } from "../lib/worldlabs";
 import {
   getConfiguredPublicApiBaseForDiagnostics,
   isPublicApiBaseConfigured,
@@ -20,10 +19,6 @@ function integrationStatus() {
     },
     gemini: {
       configured: envPresent("GEMINI_API_KEY"),
-    },
-    worldLabs: {
-      configured: envPresent("WORLD_LABS_API_KEY"),
-      enabled: isWorldLabsEnabled(),
     },
     database: {
       configured: envPresent("DATABASE_URL"),
@@ -52,7 +47,6 @@ router.get("/healthz/integrations", (_req, res) => {
   const ready =
     integrations.apify.configured &&
     integrations.gemini.configured &&
-    integrations.worldLabs.configured &&
     integrations.database.configured &&
     integrations.supabase.configured &&
     integrations.publicApiBaseUrl.configured;

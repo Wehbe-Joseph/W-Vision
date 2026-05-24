@@ -2,12 +2,7 @@ import "dotenv/config";
 import app from "./app";
 import { logger } from "./lib/logger";
 import { ensureTourImagesBucket } from "./lib/imageStorage";
-import {
-  ensureToursSpzBucket,
-  isSplatStorageConfigured,
-} from "./lib/supabaseSpzMirror";
 import { sweepExpiredTours } from "./lib/tourMemoryStore";
-import { isWorldLabsEnabled } from "./lib/worldlabs";
 
 const rawPort = process.env["PORT"] ?? "8080";
 
@@ -21,13 +16,6 @@ ensureTourImagesBucket().catch((err) => {
   logger.warn(
     { err },
     "Could not ensure tour-images bucket on boot — uploads may fail until this is resolved.",
-  );
-});
-
-ensureToursSpzBucket().catch((err) => {
-  logger.warn(
-    { err },
-    "Could not ensure tours (.spz) bucket on boot — splat mirroring may fail until this is resolved.",
   );
 });
 
@@ -45,13 +33,5 @@ app.listen(port, (err) => {
     process.exit(1);
   }
 
-  logger.info(
-    {
-      port,
-      worldLabsEnabled: isWorldLabsEnabled(),
-      worldLabsModel: process.env.WORLD_LABS_MODEL ?? "marble-1.1",
-      splatStorageConfigured: isSplatStorageConfigured(),
-    },
-    "Server listening",
-  );
+  logger.info({ port }, "Server listening");
 });
