@@ -1,4 +1,6 @@
 /** Tiny probe — if this fails on Vercel, the /api folder is not deploying correctly. */
+export const runtime = "nodejs";
+
 export default function handler(_req, res) {
   res.statusCode = 200;
   res.setHeader("Content-Type", "application/json");
