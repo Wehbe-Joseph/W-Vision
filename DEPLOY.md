@@ -13,7 +13,7 @@ Copy env vars from `artifacts/tourvision/.env.vercel.example` into the Vercel da
 | **Root Directory** | `artifacts/tourvision` (recommended). If the repo root is used instead, `api/[...path].js` at the monorepo root is also provided. |
 | **Framework Preset** | Vite |
 | **Output Directory** | leave empty (uses `vercel.json`) |
-| **Build / Install commands** | leave empty (uses `vercel.json`) |
+| **Build / Install commands** | leave empty (uses `vercel.json`), or set Build Command to `pnpm run build` — **not** `vite build` alone (that skips the API bundle) |
 | **Include files outside root directory** | **Enabled** (required for monorepo build) |
 
 The Express API is deployed via `artifacts/tourvision/api/index.js` with rewrite `/api/*` → `/api` (imports bundled `api/serverless.mjs` at build time). It is **not** a separate Railway service unless you choose that option below.
