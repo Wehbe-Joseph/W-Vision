@@ -42,7 +42,8 @@ function integrationStatus() {
 }
 
 router.get("/healthz", (_req, res) => {
-  const data = HealthCheckResponse.parse({ status: "ok" });
+  const status = envPresent("DATABASE_URL") ? "ok" : "degraded";
+  const data = HealthCheckResponse.parse({ status });
   res.json(data);
 });
 

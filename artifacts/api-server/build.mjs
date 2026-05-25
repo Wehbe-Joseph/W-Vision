@@ -23,11 +23,14 @@ async function buildAll() {
   await esbuild({
     entryPoints,
     platform: "node",
+    target: "node20",
     bundle: true,
     format: "esm",
     outdir: distDir,
     outExtension: { ".js": ".mjs" },
     logLevel: "info",
+    minify: isVercel,
+    sourcemap: isVercel ? false : "linked",
     // Some packages may not be bundleable, so we externalize them, we can add more here as needed.
     // Some of the packages below may not be imported or installed, but we're adding them in case they are in the future.
     // Examples of unbundleable packages:

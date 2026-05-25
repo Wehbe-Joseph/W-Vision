@@ -10,7 +10,7 @@ const app: Express = express();
 
 // Vercel invokes `api/[...path].js` with paths like `/healthz`, not `/api/healthz`.
 // Our routers are mounted under `/api`, so normalize before routing.
-if (process.env.VERCEL) {
+if (process.env.VERCEL === "1" || process.env.VERCEL === "true") {
   app.use((req, _res, next) => {
     const raw = req.url ?? "/";
     const qIndex = raw.indexOf("?");

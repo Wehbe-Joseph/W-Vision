@@ -16,7 +16,7 @@ Copy env vars from `artifacts/tourvision/.env.vercel.example` into the Vercel da
 | **Build / Install commands** | leave empty (uses `vercel.json`) |
 | **Include files outside root directory** | **Enabled** (required for monorepo build) |
 
-The Express API is deployed via `artifacts/tourvision/server.js` (Vercel native Express entry). It is **not** a separate Railway service unless you choose that option below.
+The Express API is deployed via `artifacts/tourvision/api/[...path].js` (lazy-loads bundled `api/serverless.mjs` at build time). It is **not** a separate Railway service unless you choose that option below.
 
 If Root Directory is wrong, `/api/*` never deploys and tour generation fails.
 
@@ -92,7 +92,8 @@ See `Dockerfile` and `railway.toml` if you want the API on Railway instead. In t
 
 | Symptom | Fix |
 |---------|-----|
-| HTTP **405** / **404** on `/api/*` | Redeploy latest `main`; confirm Root Directory is `artifacts/tourvision` and `api/index.js` exists |
+| **`FUNCTION_INVOCATION_FAILED`** on every `/api/*` call | Usually **`DATABASE_URL` missing** on Vercel. Add all API vars from `.env.vercel.example`, redeploy, then `curl .../api/healthz/integrations` |
+| HTTP **405** / **404** on `/api/*` | Redeploy latest `main`; confirm Root Directory is `artifacts/tourvision` and `api/[...path].js` exists |
 | Apify / Gemini never called | Open `/api/healthz/integrations` — add missing env vars on Vercel |
 | Generation starts then stops | Check Vercel function logs; DB / classification errors |
 | Build fails on `serverless.mjs` | Run `pnpm --filter @workspace/api-server build` before deploy |
