@@ -25,8 +25,12 @@ export const toursTable = pgTable("tours", {
   aiHighAngles: integer("ai_high_angles").notNull().default(0),
   aiLowAngles: integer("ai_low_angles").notNull().default(0),
   marbleWorldIds: jsonb("marble_world_ids"),
-  /** Per-room 3D jobs (Gemini groups + Marble) — survives api-server restart. */
+  /** Per-room generation jobs — survives api-server restart. */
   generationScenes: jsonb("generation_scenes"),
+  panoramaStatus: text("panorama_status").notNull().default("pending"),
+  roomsReady: integer("rooms_ready").notNull().default(0),
+  tourType: text("tour_type").notNull().default("panorama"),
+  isFullHouse: boolean("is_full_house").notNull().default(false),
   tourEmbedUrl: text("tour_embed_url"),
   shareToken: text("share_token").unique(),
   isWatermarked: boolean("is_watermarked").notNull().default(true),
@@ -37,7 +41,6 @@ export const toursTable = pgTable("tours", {
   processingCompletedAt: timestamp("processing_completed_at"),
   emailSent: boolean("email_sent").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-  // WorldLabs generation fields
   generationStatus: text("generation_status").notNull().default("queued"),
   worldlabsJobId: text("worldlabs_job_id"),
   generatedTourUrl: text("generated_tour_url"),

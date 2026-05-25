@@ -18,8 +18,9 @@ export const tourPhotosTable = pgTable("tour_photos", {
   angleDegrees: integer("angle_degrees"),
   marbleWorldId: text("marble_world_id"),
   marbleEmbedUrl: text("marble_embed_url"),
-  /** Public HTTPS URL to the mirrored .spz in Supabase Storage — in-app Spark viewer. */
   worldEmbedUrl: text("world_embed_url"),
+  panoramaUrl: text("panorama_url"),
+  panoramaStatus: text("panorama_status").notNull().default("pending"),
   thumbnailUrl: text("thumbnail_url"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

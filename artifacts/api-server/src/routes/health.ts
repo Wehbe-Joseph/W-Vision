@@ -20,6 +20,11 @@ function integrationStatus() {
     gemini: {
       configured: envPresent("GEMINI_API_KEY"),
     },
+    openai: {
+      configured:
+        envPresent("OPENAI_API_KEY") &&
+        process.env.OPENAI_API_KEY !== "your_key_here",
+    },
     database: {
       configured: envPresent("DATABASE_URL"),
     },
@@ -47,6 +52,7 @@ router.get("/healthz/integrations", (_req, res) => {
   const ready =
     integrations.apify.configured &&
     integrations.gemini.configured &&
+    integrations.openai.configured &&
     integrations.database.configured &&
     integrations.supabase.configured &&
     integrations.publicApiBaseUrl.configured;

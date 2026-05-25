@@ -19,6 +19,7 @@ import Settings from "@/pages/dashboard/settings";
 import Billing from "@/pages/dashboard/billing";
 import ListingImport from "@/pages/dashboard/listing-import";
 import TourViewer from "@/pages/tour-viewer";
+import TestPanoramaPage from "@/pages/test-panorama";
 import { hasPendingTour } from "@/hooks/use-pending-tour";
 
 const queryClient = new QueryClient();
@@ -93,6 +94,7 @@ function Router() {
         <Route path="/dashboard/billing" component={() => <ProtectedRoute component={Billing} />} />
         <Route path="/dashboard/settings" component={() => <ProtectedRoute component={Settings} />} />
         <Route path="/tour/:shareToken" component={() => <PublicRoute component={TourViewer} />} />
+        <Route path="/test-panorama" component={() => <PublicRoute component={TestPanoramaPage} />} />
         <Route component={NotFound} />
       </Switch>
     </>

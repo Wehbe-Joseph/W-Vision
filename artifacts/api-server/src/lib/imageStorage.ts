@@ -42,7 +42,7 @@ export async function ensureTourImagesBucket(): Promise<void> {
     if (!data.public) {
       logger.warn(
         { bucket: TOUR_IMAGES_BUCKET },
-        "tour-images bucket is private — WorldLabs cannot fetch images. Make it public in the Supabase dashboard.",
+        "tour-images bucket is private — public image URLs will not work. Make it public in the Supabase dashboard.",
       );
     }
     return;
@@ -105,8 +105,7 @@ interface UploadResult {
   key: string;
   publicUrl: string;
   /** True when the image was stored in the in-process memory store as a
-   *  fallback because Supabase Storage was unavailable. WorldLabs cannot
-   *  fetch these URLs unless the api-server is publicly accessible. */
+   *  fallback because Supabase Storage was unavailable. */
   isLocal: boolean;
 }
 

@@ -18,7 +18,7 @@ const upload = multer({
 });
 
 // POST /images/upload — multipart, pushes to Supabase Storage and returns
-// public URLs that WorldLabs can fetch from anywhere.
+// public URLs that external services can fetch from anywhere.
 router.post("/images/upload", upload.array("images", 20), async (req, res) => {
   const userId =
     (req.user as { profileId?: string; id?: string } | undefined)?.profileId ??

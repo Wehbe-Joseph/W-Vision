@@ -59,6 +59,8 @@ export interface MemTour {
   scenes: MemScene[];
   /** Original listing/upload URLs used to start generation (persisted for serverless resume). */
   sourceImageUrls?: string[];
+  panoramaStatus?: "pending" | "processing" | "ready" | "failed";
+  roomsReady?: number;
 }
 
 const TOURS = new Map<string, MemTour>();

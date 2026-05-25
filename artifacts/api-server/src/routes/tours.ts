@@ -170,14 +170,14 @@ function mapRoom(p: typeof tourPhotosTable.$inferSelect) {
     id: p.id,
     tourId: p.tourId,
     roomLabel: p.roomLabel,
+    roomType: p.roomLabel,
     floorNumber: p.floorNumber,
     qualityScore: p.qualityScore,
     isSelected: p.isSelected,
     isBestForRoom: p.isBestForRoom,
     confidenceScore: p.confidenceScore,
-    marbleWorldId: null,
-    marbleEmbedUrl: null,
-    worldEmbedUrl: p.worldEmbedUrl ?? null,
+    panoramaUrl: p.panoramaUrl ?? null,
+    panoramaStatus: p.panoramaStatus ?? "pending",
     thumbnailUrl: p.thumbnailUrl,
     isAiGenerated: p.isAiGenerated,
     createdAt: p.createdAt.toISOString(),
@@ -690,14 +690,14 @@ router.get("/tours/public/:shareToken", async (req, res) => {
             eq(tourPhotosTable.isBestForRoom, true),
           ),
         )
-        .orderBy(
-          desc(tourPhotosTable.qualityScore),
-          desc(tourPhotosTable.confidenceScore),
-          asc(tourPhotosTable.floorNumber),
-        );
+        .orderBy(asc(tourPhotosTable.floorNumber));
     } catch (err) {
       req.log.warn({ err }, "Failed to load rooms — returning empty list");
     }
+
+    const panoramaRooms = rooms.filter(
+      (r) => r.panoramaStatus === "ready" && r.panoramaUrl,
+    );
 
     let agent: typeof profilesTable.$inferSelect | undefined;
     try {
@@ -771,7 +771,10 @@ router.get("/tours/public/:shareToken", async (req, res) => {
       resolvedScenes.find(
         (x) => x.generationStatus === "completed" && x.generatedTourUrl,
       )?.generatedTourUrl ?? null;
-    const firstPhotoSplat = rooms.find((r) => r.worldEmbedUrl)?.worldEmbedUrl ?? null;
+    const firstPanorama =
+      panoramaRooms[0]?.panoramaUrl ??
+      mem?.scenes.find((s) => s.generatedTourUrl)?.generatedTourUrl ??
+      null;
 
     return res.json({
       id: tour.id,
@@ -782,7 +785,10 @@ router.get("/tours/public/:shareToken", async (req, res) => {
       listingBedrooms: tour.listingBedrooms,
       listingBathrooms: tour.listingBathrooms,
       listingSqft: tour.listingSqft,
-      marbleWorldIds: null,
+      isFullHouse: tour.isFullHouse ?? false,
+      panoramaStatus: tour.panoramaStatus ?? "pending",
+      roomsReady: tour.roomsReady ?? 0,
+      tourType: tour.tourType ?? "panorama",
       rooms: rooms.map(mapRoom),
       confidenceScore: tour.confidenceScore,
       realAngles: tour.realAngles,
@@ -798,7 +804,7 @@ router.get("/tours/public/:shareToken", async (req, res) => {
           : mem?.generatedTourUrl ??
             tour.generatedTourUrl ??
             firstSceneEmbed ??
-            firstPhotoSplat,
+            firstPanorama,
       generationStatus: mem?.generationStatus ?? tour.generationStatus,
       frozen,
       expiresAt,

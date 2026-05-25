@@ -8,7 +8,7 @@ interface StoredImage {
 }
 
 const store = new Map<string, StoredImage>();
-const TTL_MS = 2 * 60 * 60 * 1000; // 2 hours — plenty of time for WorldLabs to fetch
+const TTL_MS = 2 * 60 * 60 * 1000; // 2 hours — in-memory image fallback TTL
 
 const cleanup = setInterval(() => {
   const now = Date.now();

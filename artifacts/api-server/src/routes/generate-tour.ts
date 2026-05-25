@@ -23,8 +23,8 @@ import { queuePersistTourScenes, persistedScenesToMemScenes } from "../lib/tourS
 import {
   advanceTourGeneration,
   saveTourSourceImages,
-  finalizePhotoTourScenes,
 } from "../lib/tourGenerationDriver";
+import { runPanoramaGeneration } from "../lib/panoramaPipeline";
 import {
   getMemUser,
   setMemUserTier,
@@ -504,7 +504,21 @@ async function resumeLockedScenes(opts: { tourId: string }): Promise<void> {
       errorMessage: null,
     });
   }
-  finalizePhotoTourScenes(tourId);
+
+  const imageUrls = mem.sourceImageUrls?.length
+    ? mem.sourceImageUrls
+    : mem.scenes.flatMap((s) => s.imageUrls);
+  if (imageUrls.length === 0) return;
+
+  const classifications = await classifyListingImages(imageUrls);
+  const groups = groupClassificationsIntoScenes(classifications);
+  if (groups.length === 0) return;
+
+  await runPanoramaGeneration(tourId, groups, mem.createdOnTier, {
+    info: () => {},
+    warn: () => {},
+    error: () => {},
+  });
 }
 
 // ─── Background pipeline ──────────────────────────────────────────────────────
@@ -592,7 +606,7 @@ async function runGenerationPipeline(ctx: PipelineCtx): Promise<void> {
     "Created scenes",
   );
 
-  finalizePhotoTourScenes(tourId);
+  await runPanoramaGeneration(tourId, groups, userTier, reqLog);
 
   if (dbTourCreated) {
     try {

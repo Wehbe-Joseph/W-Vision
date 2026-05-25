@@ -11,6 +11,7 @@ import imagesRouter from "./images";
 import emailRouter from "./email";
 import scrapeListingRouter from "./scrape-listing";
 import classifyListingRouter from "./classify-listing";
+import testPanoramaRouter from "./test-panorama";
 
 const router: IRouter = Router();
 
@@ -26,5 +27,6 @@ router.use(imagesRouter);
 router.use(emailRouter);
 router.use(scrapeListingRouter);
 router.use(classifyListingRouter);
+router.use(testPanoramaRouter);
 
 export default router;

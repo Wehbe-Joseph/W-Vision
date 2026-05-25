@@ -20,14 +20,22 @@ import {
 } from "./tourScenesPersistence";
 import { isPaidTier, getMemUser, type SubscriptionTier } from "./userMemoryStore";
 import { logger } from "./logger";
+import { runPanoramaGeneration } from "./panoramaPipeline";
 
 type ReqLog = { info: Function; warn: Function; error: Function };
 
-function readSourceImageUrls(raw: unknown): string[] {
-  if (!raw || typeof raw !== "object") return [];
-  const urls = (raw as { _sourceImageUrls?: unknown })._sourceImageUrls;
-  if (!Array.isArray(urls)) return [];
-  return urls.filter((u): u is string => typeof u === "string" && u.startsWith("https://"));
+function sourceUrlsFromScenes(scenes: MemScene[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const s of scenes) {
+    for (const u of s.imageUrls) {
+      if (u.startsWith("https://") && !seen.has(u)) {
+        seen.add(u);
+        out.push(u);
+      }
+    }
+  }
+  return out;
 }
 
 async function loadTourRow(tourId: string) {
@@ -53,7 +61,7 @@ export async function hydrateMemTourFromDb(
   if (!tour || tour.userId !== userId) return undefined;
 
   const scenes = persistedScenesToMemScenes(tour.generationScenes);
-  const sourceImageUrls = readSourceImageUrls(tour.marbleWorldIds);
+  const sourceImageUrls = sourceUrlsFromScenes(scenes);
   const gs = tour.generationStatus;
   const generationStatus: MemGenerationStatus =
     gs === "queued" || gs === "processing" || gs === "completed" || gs === "failed"
@@ -98,24 +106,7 @@ export async function hydrateMemTourFromDb(
   return mem;
 }
 
-async function persistSourceImageUrls(
-  tourId: string,
-  imageUrls: string[],
-): Promise<void> {
-  if (imageUrls.length === 0) return;
-  try {
-    await db
-      .update(toursTable)
-      .set({
-        marbleWorldIds: { _sourceImageUrls: imageUrls },
-      })
-      .where(eq(toursTable.id, tourId));
-  } catch (err) {
-    logger.warn({ err, tourId }, "Could not persist source image URLs");
-  }
-}
-
-/** Mark unlocked scenes complete with photo thumbnails (no external 3D provider). */
+/** Mark unlocked scenes complete with photo thumbnails (legacy no-op path). */
 export function finalizePhotoTourScenes(tourId: string): void {
   const mem = getMemTour(tourId);
   if (!mem) return;
@@ -186,8 +177,8 @@ async function buildScenesFromImages(
   mem.generationStatus = "processing";
   queuePersistTourScenes(tourId);
 
-  finalizePhotoTourScenes(tourId);
-  reqLog.info({ tourId, sceneCount: scenes.length }, "Photo tour scenes ready");
+  await runPanoramaGeneration(tourId, groups, userTier, reqLog);
+  reqLog.info({ tourId, sceneCount: scenes.length }, "Panorama tour ready");
   return true;
 }
 
@@ -219,20 +210,30 @@ export async function advanceTourGeneration(
   const refreshed = getMemTour(tourId);
   if (!refreshed || refreshed.scenes.length === 0) return;
 
-  const needsFinalize = refreshed.scenes.some(
+  const needsPanorama = refreshed.scenes.some(
     (s) => !s.locked && s.generationStatus !== "completed",
   );
-  if (needsFinalize) {
-    finalizePhotoTourScenes(tourId);
+  if (needsPanorama && refreshed.sourceImageUrls?.length) {
+    const classifications = await classifyListingImages(
+      refreshed.sourceImageUrls,
+    );
+    const groups = groupClassificationsIntoScenes(classifications);
+    if (groups.length > 0) {
+      await runPanoramaGeneration(
+        tourId,
+        groups,
+        refreshed.createdOnTier,
+        reqLog,
+      );
+    }
   }
 }
 
 export async function saveTourSourceImages(
-  tourId: string,
+  _tourId: string,
   imageUrls: string[],
   mem?: MemTour,
 ): Promise<void> {
   const httpsUrls = imageUrls.filter((u) => u.startsWith("https://"));
   if (mem) mem.sourceImageUrls = httpsUrls;
-  await persistSourceImageUrls(tourId, httpsUrls);
 }

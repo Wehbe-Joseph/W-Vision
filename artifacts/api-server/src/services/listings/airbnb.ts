@@ -390,7 +390,7 @@ const ZIP_OWNER_ID = "listing-scrape";
 /**
  * If the actor's KV store contains an `images.zip` (or similar), download it,
  * unzip in memory, and upload each photo to Supabase Storage. Returns a
- * normalized `ListingData` with public HTTPS URLs Marble can fetch.
+ * normalized `ListingData` with public HTTPS image URLs.
  *
  * Returns null when no zip was found, so the caller can fall through.
  */
