@@ -1,6 +1,5 @@
 /**
- * Vercel catch-all for /api/* — filesystem route (no rewrite to /server).
- * Static import ensures api/serverless.mjs is packaged into this function.
+ * Vercel API entry — all /api/* traffic is rewritten here (see vercel.json).
  */
 import app from "./serverless.mjs";
 

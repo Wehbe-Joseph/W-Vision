@@ -5,8 +5,22 @@
   "outputDirectory": "artifacts/tourvision/dist/public",
   "rewrites": [
     {
+      "source": "/api/(.*)",
+      "destination": "/api"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
-  ]
+  ],
+  "functions": {
+    "api/index.js": {
+      "maxDuration": 300,
+      "memory": 3008,
+      "includeFiles": [
+        "api/serverless.mjs",
+        "node_modules/sharp/**"
+      ]
+    }
+  }
 }
