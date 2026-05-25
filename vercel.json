@@ -10,12 +10,12 @@
     }
   ],
   "functions": {
-    "artifacts/tourvision/api/[...path].js": {
+    "api/[...path].js": {
       "maxDuration": 300,
       "memory": 3008,
       "includeFiles": [
-        "artifacts/tourvision/api/serverless.mjs",
-        "artifacts/tourvision/node_modules/sharp/**"
+        "api/serverless.mjs",
+        "node_modules/sharp/**"
       ]
     }
   }

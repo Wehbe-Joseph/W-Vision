@@ -10,7 +10,7 @@ Copy env vars from `artifacts/tourvision/.env.vercel.example` into the Vercel da
 
 | Setting | Value |
 |---------|--------|
-| **Root Directory** | `artifacts/tourvision` |
+| **Root Directory** | `artifacts/tourvision` (recommended). If the repo root is used instead, `api/[...path].js` at the monorepo root is also provided. |
 | **Framework Preset** | Vite |
 | **Output Directory** | leave empty (uses `vercel.json`) |
 | **Build / Install commands** | leave empty (uses `vercel.json`) |
@@ -18,7 +18,7 @@ Copy env vars from `artifacts/tourvision/.env.vercel.example` into the Vercel da
 
 The Express API is deployed via `artifacts/tourvision/api/[...path].js` (Vercel filesystem route for `/api/*`, imports bundled `api/serverless.mjs` at build time). It is **not** a separate Railway service unless you choose that option below.
 
-If Root Directory is wrong, `/api/*` never deploys and tour generation fails.
+If Root Directory is wrong, `/api/*` never deploys and tour generation fails. After deploy, `curl https://YOUR_APP.vercel.app/api/healthz` must return JSON like `{"status":"ok"}`, not `FUNCTION_INVOCATION_FAILED`.
 
 **Delete `VITE_API_BASE_URL` on Vercel** unless you host the API on a separate live domain. If it still points at Railway or `localhost`, the browser will skip your Vercel API entirely.
 

@@ -4,6 +4,7 @@
 dist
 public
 artifacts/tourvision/api/serverless.mjs
+api/serverless.mjs
 tmp
 out-tsc
 *.tsbuildinfo
