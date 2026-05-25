@@ -22,6 +22,7 @@ import {
 import { getApiUrl } from "@/lib/runtime-api";
 import { getTourPageUrl } from "@/lib/tour-url";
 import { filterListingImageUrls } from "@/lib/listing-image-filter";
+import { compressDataUrlForUpload } from "@/lib/compress-image";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -255,52 +256,27 @@ export default function NewTour() {
     const authHeaders = { Authorization: `Bearer ${token}` };
 
     try {
-      let uploadedUrls: string[] = [];
+      let uploadedImages: { name: string; dataUrl: string }[] = [];
 
       if (photos.length > 0) {
         setIsUploading(true);
-        const formData = new FormData();
-        for (const photo of photos) {
-          const blob = dataUrlToBlob(photo.dataUrl);
-          formData.append("images", blob, photo.name);
-        }
-
-        const uploadRes = await fetch(getApiUrl("/api/images/upload"), {
-          method: "POST",
-          credentials: "include",
-          headers: authHeaders,
-          body: formData,
-        });
-        setIsUploading(false);
-
-        if (uploadRes.ok) {
-          const uploadData = (await uploadRes.json()) as { images: { url: string }[] };
-          uploadedUrls = uploadData.images.map((i) => i.url);
-        } else {
-          let detail = `HTTP ${uploadRes.status}`;
-          try {
-            const errBody = await uploadRes.json();
-            if (errBody?.detail) detail = errBody.detail;
-            else if (errBody?.error) detail = errBody.error;
-          } catch {
-            // Body wasn't JSON — fall back to text snippet
-            try {
-              const t = await uploadRes.text();
-              if (t) detail = t.slice(0, 200);
-            } catch {
-              // ignore
-            }
-          }
+        try {
+          uploadedImages = await Promise.all(
+            photos.map((p) => compressDataUrlForUpload(p.dataUrl, p.name)),
+          );
+        } catch {
           toast({
-            title: "Upload failed",
-            description: detail,
+            title: "Could not prepare photos",
+            description: "Try smaller JPG or PNG files.",
             variant: "destructive",
           });
+          setIsUploading(false);
           return;
         }
+        setIsUploading(false);
       }
 
-      const allImageUrls = [...apifyImageUrls, ...uploadedUrls];
+      const allImageUrls = [...apifyImageUrls];
 
       // Snapshot a preview-friendly set of images for the processing screen.
       // We always want the user to see *their* photos — combine Apify-scraped
@@ -319,6 +295,8 @@ export default function NewTour() {
           imageUrls: allImageUrls.filter(
             (u): u is string => typeof u === "string" && u.length > 0,
           ),
+          uploadedImages:
+            uploadedImages.length > 0 ? uploadedImages : undefined,
         },
         { headers: authHeaders },
       );

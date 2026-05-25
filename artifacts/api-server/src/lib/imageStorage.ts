@@ -1,5 +1,6 @@
 import { randomBytes } from "crypto";
-import { getSupabaseAdmin, requireSupabaseAdmin } from "./supabaseAdmin";
+import { getSupabaseAdmin } from "./supabaseAdmin";
+import { normalizeToJpeg } from "./imageNormalize";
 import { storeImage, getPublicBaseUrl } from "./imageStore";
 import { resolvePublicApiBaseUrl } from "./resolvePublicApiBaseUrl";
 import { logger } from "./logger";
@@ -123,15 +124,27 @@ export async function uploadTourImage(
   ownerId: string,
   req?: Request,
 ): Promise<UploadResult> {
+  let uploadBuffer = data;
+  let contentType = mimeType;
+  try {
+    uploadBuffer = await normalizeToJpeg(data);
+    contentType = "image/jpeg";
+  } catch {
+    /* keep original bytes if normalization fails */
+  }
+
   if (storageAvailable()) {
-    const admin = requireSupabaseAdmin();
-    const ext = extFromMime(mimeType);
+    const admin = getSupabaseAdmin();
+    if (!admin) {
+      logger.warn("supabaseAdmin missing — using in-memory image store");
+    } else {
+    const ext = "jpg";
     const key = `${ownerId}/${Date.now()}-${randomBytes(8).toString("hex")}.${ext}`;
 
     // First attempt
     let uploadError = await admin.storage
       .from(TOUR_IMAGES_BUCKET)
-      .upload(key, data, { contentType: mimeType, cacheControl: "3600", upsert: false })
+      .upload(key, uploadBuffer, { contentType, cacheControl: "3600", upsert: false })
       .then((r) => r.error);
 
     // If the bucket was missing, create it and retry once.
@@ -151,7 +164,7 @@ export async function uploadTourImage(
         const retryKey = `${ownerId}/${Date.now()}-${randomBytes(8).toString("hex")}.${ext}`;
         const retry = await admin.storage
           .from(TOUR_IMAGES_BUCKET)
-          .upload(retryKey, data, { contentType: mimeType, cacheControl: "3600", upsert: false });
+          .upload(retryKey, uploadBuffer, { contentType, cacheControl: "3600", upsert: false });
         if (!retry.error) {
           const { data: pu } = admin.storage
             .from(TOUR_IMAGES_BUCKET)
@@ -174,10 +187,11 @@ export async function uploadTourImage(
       { err: uploadError, key },
       "Supabase Storage upload failed — falling back to in-memory store",
     );
+    }
   }
 
   // ── In-memory fallback ────────────────────────────────────────────────────
-  const id = storeImage(data, mimeType);
+  const id = storeImage(uploadBuffer, contentType);
   const baseUrl = req
     ? getPublicBaseUrl(req as Parameters<typeof getPublicBaseUrl>[0])
     : resolvePublicApiBaseUrl();

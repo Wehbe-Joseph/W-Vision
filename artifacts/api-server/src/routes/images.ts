@@ -18,9 +18,19 @@ const upload = multer({
   },
 });
 
-// POST /images/upload — multipart, pushes to Supabase Storage and returns
-// public URLs that external services can fetch from anywhere.
-router.post("/images/upload", upload.array("images", 20), async (req, res) => {
+// POST /images/upload — multipart (local dev); production prefers JSON on generate-tour.
+router.post("/images/upload", (req, res, next) => {
+  upload.array("images", 20)(req, res, (err) => {
+    if (err) {
+      req.log.warn({ err }, "multipart parse failed");
+      return res.status(400).json({
+        error: "Invalid upload",
+        detail: err instanceof Error ? err.message : "Could not parse images",
+      });
+    }
+    next();
+  });
+}, async (req, res) => {
   const userId = await requireProfileId(req);
   if (!userId) {
     return res.status(401).json({
