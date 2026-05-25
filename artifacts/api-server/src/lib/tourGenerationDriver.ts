@@ -1,30 +1,24 @@
 import { db } from "@workspace/db";
-import { toursTable, profilesTable } from "@workspace/db";
+import { toursTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import {
-  classifyListingImages,
-  groupClassificationsIntoScenes,
-} from "../services/imageClassifier";
 import {
   createMemTour,
   getMemTour,
-  updateMemScene,
-  rollupMemTourFromScenes,
-  type MemScene,
-  type MemGenerationStatus,
   type MemTour,
+  type MemGenerationStatus,
 } from "./tourMemoryStore";
-import {
-  persistedScenesToMemScenes,
-  queuePersistTourScenes,
-} from "./tourScenesPersistence";
-import { isPaidTier, getMemUser, type SubscriptionTier } from "./userMemoryStore";
+import { persistedScenesToMemScenes } from "./tourScenesPersistence";
 import { logger } from "./logger";
+import { runFullTourPipeline } from "./tourPipeline";
 import { runPanoramaGeneration } from "./panoramaPipeline";
+import type { SceneGroup } from "../services/imageClassifier/grouping";
+import type { RoomType } from "../services/imageClassifier/gemini";
 
 type ReqLog = { info: Function; warn: Function; error: Function };
 
-function sourceUrlsFromScenes(scenes: MemScene[]): string[] {
+function sourceUrlsFromScenes(
+  scenes: ReturnType<typeof persistedScenesToMemScenes>,
+): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const s of scenes) {
@@ -36,6 +30,18 @@ function sourceUrlsFromScenes(scenes: MemScene[]): string[] {
     }
   }
   return out;
+}
+
+function scenesToGroups(mem: MemTour): SceneGroup[] {
+  return mem.scenes.map((s) => ({
+    id: s.id,
+    label: s.label,
+    roomType: s.roomType as RoomType,
+    thumbnailUrl: s.thumbnailUrl,
+    worldImageUrl: s.imageUrls[0] ?? s.thumbnailUrl,
+    classifications: [],
+    recommendedFor3d: true,
+  }));
 }
 
 async function loadTourRow(tourId: string) {
@@ -68,18 +74,6 @@ export async function hydrateMemTourFromDb(
       ? gs
       : "processing";
 
-  let tier: SubscriptionTier = getMemUser(userId).tier;
-  try {
-    const profile = await db.query.profilesTable.findFirst({
-      where: eq(profilesTable.id, userId),
-    });
-    if (profile?.subscriptionTier) {
-      tier = profile.subscriptionTier as SubscriptionTier;
-    }
-  } catch {
-    /* memory tier */
-  }
-
   const mem: MemTour = createMemTour({
     tourId: tour.id,
     userId: tour.userId,
@@ -99,92 +93,23 @@ export async function hydrateMemTourFromDb(
     completedAt: tour.processingCompletedAt?.getTime() ?? null,
     expiresAt: null,
     frozen: false,
-    createdOnTier: tier,
+    createdOnTier: "unlimited",
     scenes,
     sourceImageUrls,
+    roomsDetected: tour.roomsDetected ?? scenes.length,
+    roomsReady: tour.roomsReady ?? 0,
+    pipelineStage:
+      generationStatus === "completed"
+        ? 4
+        : scenes.length > 0
+          ? 3
+          : 1,
   });
   return mem;
 }
 
-/** Mark unlocked scenes complete with photo thumbnails (legacy no-op path). */
-export function finalizePhotoTourScenes(tourId: string): void {
-  const mem = getMemTour(tourId);
-  if (!mem) return;
-
-  for (const scene of mem.scenes) {
-    if (scene.locked) continue;
-    updateMemScene(tourId, scene.id, {
-      generationStatus: "completed",
-      generatedTourUrl: null,
-      operationId: null,
-      errorMessage: null,
-    });
-  }
-
-  mem.currentStage = "Tour ready";
-  mem.generationStatus = "completed";
-  if (!mem.completedAt) mem.completedAt = Date.now();
-  rollupMemTourFromScenes(tourId);
-  queuePersistTourScenes(tourId);
-}
-
-async function buildScenesFromImages(
-  tourId: string,
-  imageUrls: string[],
-  userTier: SubscriptionTier,
-  reqLog: ReqLog,
-): Promise<boolean> {
-  const mem = getMemTour(tourId);
-  if (!mem || mem.scenes.length > 0) return false;
-
-  mem.currentStage = "Analyzing photos with AI…";
-  mem.generationStatus = "processing";
-  reqLog.info({ tourId, imageCount: imageUrls.length }, "Classifying images (status-driven)");
-
-  const classifications = await classifyListingImages(imageUrls, {
-    onBatch: (idx) => {
-      const m = getMemTour(tourId);
-      if (m) m.currentStage = `Analyzing photos with AI… (batch ${idx + 1})`;
-    },
-  });
-
-  const groups = groupClassificationsIntoScenes(classifications);
-  if (groups.length === 0) {
-    mem.generationStatus = "failed";
-    mem.errorMessage = "Couldn't classify any photos for tour generation";
-    queuePersistTourScenes(tourId);
-    return false;
-  }
-
-  const isFree = !isPaidTier(userTier);
-  const scenes: MemScene[] = groups.map((g, idx) => ({
-    id: g.id,
-    label: g.label,
-    roomType: g.roomType,
-    thumbnailUrl: g.thumbnailUrl,
-    imageUrls: [g.worldImageUrl],
-    operationId: null,
-    worldId: null,
-    generationStatus: "queued",
-    generatedTourUrl: null,
-    errorMessage: null,
-    locked: isFree && idx > 0,
-  }));
-
-  mem.scenes = scenes;
-  mem.currentStage = "Organizing rooms…";
-  mem.previewImageUrl = scenes[0]?.thumbnailUrl ?? null;
-  mem.generationStatus = "processing";
-  queuePersistTourScenes(tourId);
-
-  await runPanoramaGeneration(tourId, groups, userTier, reqLog);
-  reqLog.info({ tourId, sceneCount: scenes.length }, "Panorama tour ready");
-  return true;
-}
-
 /**
- * Advance tour generation on each status poll — required on Vercel serverless
- * where background timers and in-memory state do not survive between requests.
+ * Advance tour generation on each status poll — required on Vercel serverless.
  */
 export async function advanceTourGeneration(
   tourId: string,
@@ -202,30 +127,19 @@ export async function advanceTourGeneration(
       ? mem.sourceImageUrls
       : mem.scenes.flatMap((s) => s.imageUrls);
 
-  if (mem.scenes.length === 0 && imageUrls.length > 0) {
-    await buildScenesFromImages(tourId, imageUrls, mem.createdOnTier, reqLog);
+  if (imageUrls.length === 0) return;
+
+  if (mem.scenes.length === 0) {
+    await runFullTourPipeline({ tourId, userId, imageUrls, reqLog });
     return;
   }
 
-  const refreshed = getMemTour(tourId);
-  if (!refreshed || refreshed.scenes.length === 0) return;
-
-  const needsPanorama = refreshed.scenes.some(
-    (s) => !s.locked && s.generationStatus !== "completed",
+  const needsPanorama = mem.scenes.some(
+    (s) => s.generationStatus !== "completed",
   );
-  if (needsPanorama && refreshed.sourceImageUrls?.length) {
-    const classifications = await classifyListingImages(
-      refreshed.sourceImageUrls,
-    );
-    const groups = groupClassificationsIntoScenes(classifications);
-    if (groups.length > 0) {
-      await runPanoramaGeneration(
-        tourId,
-        groups,
-        refreshed.createdOnTier,
-        reqLog,
-      );
-    }
+  if (needsPanorama) {
+    const groups = scenesToGroups(mem);
+    await runPanoramaGeneration(tourId, groups, reqLog);
   }
 }
 
@@ -236,4 +150,9 @@ export async function saveTourSourceImages(
 ): Promise<void> {
   const httpsUrls = imageUrls.filter((u) => u.startsWith("https://"));
   if (mem) mem.sourceImageUrls = httpsUrls;
+}
+
+/** @deprecated Legacy export */
+export function finalizePhotoTourScenes(_tourId: string): void {
+  /* no-op */
 }

@@ -6,6 +6,7 @@ import http from "http";
 import { fileURLToPath } from "url";
 import { uploadTourImage } from "./imageStorage";
 import { logger } from "./logger";
+import { resolvePublicApiBaseUrl } from "./resolvePublicApiBaseUrl";
 
 function getOpenAI(): OpenAI {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -15,7 +16,7 @@ function getOpenAI(): OpenAI {
   return new OpenAI({ apiKey });
 }
 
-const PANORAMA_PROMPT = `Using the attached reference images of the same interior space, generate a 360-degree equirectangular panorama projection of this exact room. Generate the full spherical view of this space unwrapped onto a flat rectangle. The horizontal axis spans 360 degrees of camera rotation: Reference 1 occupies the centre of the frame, Reference 2 occupies the right quarter, Reference 3 spans the left and right edges (at the seam), and the fourth unseen wall (rotated 90 degrees counter-clockwise from Reference 1) occupies the left quarter - infer this view from the references, showing continuation of the same architectural language. Vertical axis spans 180 degrees from ceiling to floor. Straight architectural lines curve as they approach the top and bottom edges due to spherical distortion. Horizon line sits at the exact vertical centre. Preserve exactly: all materials, colours, finishes, furniture, lighting conditions, architectural details, and atmosphere from the references. Camera position: single fixed point at the centre of the room, eye level 1.6m. This is what a 360 camera would capture if placed in this exact space. The left and right edges of the image must match seamlessly, both edges depict the same point in 3D space. Format: equirectangular projection, photorealistic, cinematic, no text, no people.`;
+const PANORAMA_PROMPT = `Using the attached reference images of the same interior space, generate a 360-degree equirectangular panorama projection of this exact room. Generate the full spherical view of this space unwrapped onto a flat rectangle. The horizontal axis spans 360 degrees of camera rotation: Reference 1 occupies the centre of the frame, Reference 2 occupies the right quarter, Reference 3 spans the left and right edges (at the seam), and the fourth unseen wall (rotated 90 degrees counter-clockwise from Reference 1) occupies the left quarter - infer this view from the references, showing continuation of the same architectural language. Vertical axis spans 180 degrees from ceiling to floor. Straight architectural lines curve as they approach the top and bottom edges due to spherical distortion. Horizon line sits at the exact vertical centre. Preserve exactly: all materials, colours, finishes, furniture, lighting conditions, architectural details, and atmosphere from the references. Terracotta plaster walls, oak joinery, travertine island, natural linen upholstery, polished terracotta micro-cement floor, black linear track lighting, Noguchi-style pendant, late golden hour light. Camera position: single fixed point at the centre of the room, eye level 1.6m. This is what a 360 camera would capture if placed in this exact space. The left and right edges of the image must match seamlessly, both edges depict the same point in 3D space (the area shown at the centre of Reference 3). Format: equirectangular projection, photorealistic, cinematic, no text, no people.`;
 
 function tourvisionPublicPanoramasDir(): string {
   const here = path.dirname(fileURLToPath(import.meta.url));
@@ -129,14 +130,29 @@ export async function generatePanorama(
     const filepath = path.join(localDir, filename);
     fs.writeFileSync(filepath, imageBuffer);
 
-    const { publicUrl } = await uploadTourImage(
-      imageBuffer,
-      "image/jpeg",
-      `panoramas/${tourId}`,
-    );
+    // Always persist file locally (served from tourvision/public/panoramas).
+    const relativePath = `/panoramas/${filename}`;
 
-    const panoramaUrl = publicUrl || `/panoramas/${filename}`;
-    logger.info({ panoramaUrl, roomType }, "Panorama saved");
+    let publicUrl: string | null = null;
+    try {
+      const uploaded = await uploadTourImage(
+        imageBuffer,
+        "image/jpeg",
+        `panoramas/${tourId}`,
+      );
+      publicUrl = uploaded.publicUrl;
+    } catch (uploadErr) {
+      logger.warn({ err: uploadErr, tourId }, "Supabase panorama upload failed");
+    }
+
+    const origin =
+      process.env.TOURVISION_PUBLIC_URL?.replace(/\/$/, "") ||
+      (process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : resolvePublicApiBaseUrl().replace(/\/$/, ""));
+
+    const panoramaUrl = publicUrl ?? `${origin}${relativePath}`;
+    logger.info({ panoramaUrl, roomType, relativePath }, "Panorama saved");
     return panoramaUrl;
   } catch (error) {
     logger.error({ err: error, roomType, tourId }, "Panorama generation failed");

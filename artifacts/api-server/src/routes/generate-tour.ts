@@ -8,36 +8,19 @@ import { uploadDataUrlToStorage } from "../lib/imageStorage";
 import {
   createMemTour,
   getMemTour,
-  memTourCountThisMonthForUser,
-  memTotalToursForUser,
-  updateMemScene,
-  rollupMemTourFromScenes,
   type MemScene,
-  type MemGenerationStatus,
 } from "../lib/tourMemoryStore";
-import {
-  classifyListingImages,
-  groupClassificationsIntoScenes,
-} from "../services/imageClassifier";
-import { queuePersistTourScenes, persistedScenesToMemScenes } from "../lib/tourScenesPersistence";
+import { persistedScenesToMemScenes } from "../lib/tourScenesPersistence";
 import {
   advanceTourGeneration,
   saveTourSourceImages,
 } from "../lib/tourGenerationDriver";
-import { runPanoramaGeneration } from "../lib/panoramaPipeline";
-import {
-  getMemUser,
-  setMemUserTier,
-  TIER_TOUR_LIMITS,
-  FREE_TIER_TTL_MS,
-  isPaidTier,
-  type SubscriptionTier,
-} from "../lib/userMemoryStore";
+import { runFullTourPipeline } from "../lib/tourPipeline";
+import { setMemUserTier } from "../lib/userMemoryStore";
+import { PIPELINE_STAGE_LABELS } from "../lib/tourPipeline";
 import { GenerateTourBody } from "@workspace/api-zod";
 
 const router = Router();
-
-const TOUR_LIMITS = TIER_TOUR_LIMITS;
 
 function generateShareToken() {
   return randomBytes(12).toString("hex");
@@ -69,43 +52,18 @@ router.post("/generate-tour", async (req, res) => {
     const imageUrls: string[] = parsed.data.imageUrls ?? [];
     const uploadedImages: { name: string; dataUrl: string }[] = parsed.data.uploadedImages ?? [];
 
-    // Resolve the user's tier — prefer DB, fall back to memory.
-    let userTier: "free" | "pro" | "unlimited" = "free";
-    let dbToursThisMonth = 0;
-    let dbTotalTours = 0;
     try {
       const profile = await db.query.profilesTable.findFirst({
         where: eq(profilesTable.id, userId),
       });
-      if (profile) {
-        userTier =
-          (profile.subscriptionTier as "free" | "pro" | "unlimited") ?? "free";
-        dbToursThisMonth = profile.toursThisMonth ?? 0;
-        dbTotalTours = profile.totalTours ?? 0;
-        // Mirror the tier into memory so /subscribe + freeze logic agree
-        setMemUserTier(userId, userTier);
-      } else {
-        userTier = getMemUser(userId).tier;
+      if (profile?.subscriptionTier) {
+        setMemUserTier(
+          userId,
+          profile.subscriptionTier as "free" | "pro" | "unlimited",
+        );
       }
     } catch {
-      req.log.warn(
-        "DB unavailable for profile lookup — using memory store for tier",
-      );
-      userTier = getMemUser(userId).tier;
-    }
-
-    const tierLimit = TOUR_LIMITS[userTier] ?? 1;
-    const memCountThisMonth = memTourCountThisMonthForUser(userId);
-    const memTotalTours = memTotalToursForUser(userId);
-    const effectiveUsageCount =
-      userTier === "free"
-        ? Math.max(memTotalTours, dbTotalTours)
-        : Math.max(dbToursThisMonth, memCountThisMonth);
-    if (effectiveUsageCount >= tierLimit) {
-      return res.status(403).json({
-        error: "Tour limit reached. Upgrade to generate more tours.",
-        code: "LIMIT_REACHED",
-      });
+      req.log.warn("DB unavailable for profile lookup");
     }
 
     // Build the final image URL list
@@ -149,7 +107,9 @@ router.post("/generate-tour", async (req, res) => {
           status: "pending",
           shareToken,
           floorCount: floorCount ?? 1,
-          isWatermarked: true,
+          isWatermarked: false,
+          isFullHouse: true,
+          tourType: "panorama",
           processingStartedAt,
           generationStatus: "queued",
           currentStage: "Preparing images…",
@@ -169,9 +129,6 @@ router.post("/generate-tour", async (req, res) => {
       listingUrl === "manual-upload"
         ? "Uploaded photos"
         : "Property at " + (listingUrl.split("/")[2] ?? listingUrl);
-    const expiresAt = isPaidTier(userTier)
-      ? null
-      : Date.now() + FREE_TIER_TTL_MS;
     const memTour = createMemTour({
       tourId,
       userId,
@@ -189,11 +146,12 @@ router.post("/generate-tour", async (req, res) => {
       imageCount: totalImageCount,
       viewCount: 0,
       completedAt: null,
-      expiresAt,
+      expiresAt: null,
       frozen: false,
-      createdOnTier: userTier,
+      createdOnTier: "unlimited",
       scenes: [],
       sourceImageUrls: publicImageUrls,
+      pipelineStage: 1,
     });
 
     void saveTourSourceImages(tourId, publicImageUrls, memTour);
@@ -238,13 +196,10 @@ router.post("/generate-tour", async (req, res) => {
       return;
     }
 
-    const pipeline = runGenerationPipeline({
+    const pipeline = runFullTourPipeline({
       tourId,
       userId,
-      dbTourCreated,
       imageUrls: publicImageUrls,
-      processingStartedAt,
-      userTier,
       reqLog: req.log,
     });
 
@@ -307,9 +262,12 @@ router.get("/generate-tour/:tourId/status", async (req, res) => {
     if (tour.userId !== userId) {
       return res.status(404).json({ error: "Tour not found" });
     }
+    const stage = mem?.pipelineStage ?? 1;
     return res.json({
       status: tour.status,
       generationStatus: mem?.generationStatus ?? tour.generationStatus,
+      pipelineStage: stage,
+      pipelineStageLabel: PIPELINE_STAGE_LABELS[stage as 1 | 2 | 3 | 4],
       currentStage:
         mem?.currentStage ??
         tour.currentStage ??
@@ -322,7 +280,10 @@ router.get("/generate-tour/:tourId/status", async (req, res) => {
         mem?.previewImageUrl ?? tour.previewImageUrl ?? tour.thumbnailUrl,
       errorMessage: mem?.errorMessage ?? tour.errorMessage,
       confidenceScore: tour.confidenceScore,
-      roomsDetected: mem?.scenes.length ?? tour.roomsDetected,
+      roomsDetected: mem?.roomsDetected ?? mem?.scenes.length ?? tour.roomsDetected,
+      roomsTotal: mem?.roomsDetected ?? mem?.scenes.length ?? tour.roomsDetected,
+      roomsReady: mem?.roomsReady ?? tour.roomsReady ?? 0,
+      shareToken: tour.shareToken,
       scenes: (mem?.scenes ?? []).map(serializeScene),
     });
   }
@@ -331,9 +292,12 @@ router.get("/generate-tour/:tourId/status", async (req, res) => {
     return res.status(404).json({ error: "Tour not found" });
   }
 
+  const stage = mem.pipelineStage ?? 1;
   return res.json({
     status: mem.generationStatus === "completed" ? "ready" : "pending",
     generationStatus: mem.generationStatus,
+    pipelineStage: stage,
+    pipelineStageLabel: PIPELINE_STAGE_LABELS[stage as 1 | 2 | 3 | 4],
     currentStage: mem.currentStage ?? stageLabels[mem.generationStatus],
     estimatedMinutes: estimatedMinutes[mem.generationStatus] ?? 3,
     worldlabsJobId: null,
@@ -341,7 +305,10 @@ router.get("/generate-tour/:tourId/status", async (req, res) => {
     previewImageUrl: mem.previewImageUrl,
     errorMessage: mem.errorMessage,
     confidenceScore: null,
-    roomsDetected: mem.scenes.length || null,
+      roomsDetected: mem.roomsDetected ?? (mem.scenes.length || null),
+    roomsTotal: mem.roomsDetected ?? mem.scenes.length,
+    roomsReady: mem.roomsReady ?? 0,
+    shareToken: mem.shareToken,
     scenes: mem.scenes.map(serializeScene),
   });
 });
@@ -361,8 +328,7 @@ function serializeScene(s: MemScene) {
   };
 }
 
-// POST /generate-tour/:tourId/resume — after upgrade, unlock + dispatch
-// every scene that was deferred by the free-tier limiter.
+// POST /generate-tour/:tourId/resume — re-run pipeline for incomplete tours
 router.post("/generate-tour/:tourId/resume", async (req, res) => {
   const userId =
     (req.user as { profileId?: string; id?: string } | undefined)?.profileId ??
@@ -370,33 +336,7 @@ router.post("/generate-tour/:tourId/resume", async (req, res) => {
     (req.headers["x-user-id"] as string | undefined);
   if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
-  // Resolve tier from DB / memory (upgrade must have landed before resume).
-  let tier: "free" | "pro" | "unlimited" = getMemUser(userId).tier;
-  try {
-    const profile = await db.query.profilesTable.findFirst({
-      where: eq(profilesTable.id, userId),
-    });
-    if (profile?.subscriptionTier) {
-      tier = profile.subscriptionTier as typeof tier;
-      setMemUserTier(userId, tier);
-    }
-  } catch {
-    /* memory tier is fine */
-  }
-
-  if (!isPaidTier(tier)) {
-    return res.status(402).json({
-      error: "Upgrade required",
-      code: "PAYMENT_REQUIRED",
-      message:
-        "Upgrade to a paid plan to build the rest of your home in 3D.",
-    });
-  }
-
   let mem = getMemTour(req.params.tourId);
-
-  // After an api-server restart the in-memory mirror is empty — rebuild it
-  // from Postgres `generation_scenes` so resume still works.
   if (!mem) {
     try {
       const tour = await db.query.toursTable.findFirst({
@@ -406,19 +346,6 @@ router.post("/generate-tour/:tourId/resume", async (req, res) => {
         return res.status(404).json({ error: "Tour not found" });
       }
       const scenes = persistedScenesToMemScenes(tour.generationScenes);
-      if (scenes.length === 0) {
-        return res.status(404).json({
-          error: "Tour not found",
-          message:
-            "No saved room data for this tour. Open the share link once, or generate the tour again.",
-        });
-      }
-      const gs = tour.generationStatus;
-      const generationStatus: MemGenerationStatus =
-        gs === "queued" || gs === "processing" || gs === "completed" || gs === "failed"
-          ? gs
-          : "processing";
-
       createMemTour({
         tourId: tour.id,
         userId: tour.userId,
@@ -428,23 +355,22 @@ router.post("/generate-tour/:tourId/resume", async (req, res) => {
         listingPlatform: tour.listingPlatform ?? "other",
         operationId: null,
         worldId: null,
-        generationStatus,
-        currentStage: tour.currentStage ?? "Restored from database…",
+        generationStatus: "processing",
+        currentStage: tour.currentStage ?? "Resuming…",
         generatedTourUrl: tour.generatedTourUrl,
         previewImageUrl: tour.previewImageUrl ?? tour.thumbnailUrl,
         errorMessage: tour.errorMessage,
         imageCount: tour.photosUsed ?? 0,
         viewCount: tour.viewCount,
-        completedAt: tour.processingCompletedAt?.getTime() ?? null,
+        completedAt: null,
         expiresAt: null,
         frozen: false,
-        createdOnTier: tier,
+        createdOnTier: "unlimited",
         scenes,
+        sourceImageUrls: [],
       });
-      rollupMemTourFromScenes(tour.id);
       mem = getMemTour(req.params.tourId);
-    } catch (err) {
-      req.log.warn({ err, tourId: req.params.tourId }, "DB hydrate for resume failed");
+    } catch {
       return res.status(404).json({ error: "Tour not found" });
     }
   }
@@ -453,175 +379,20 @@ router.post("/generate-tour/:tourId/resume", async (req, res) => {
     return res.status(404).json({ error: "Tour not found" });
   }
 
-  const lockedScenes = mem.scenes.filter((s) => s.locked);
-  if (lockedScenes.length === 0) {
-    return res.json({ success: true, resumed: 0, message: "Nothing to resume." });
-  }
+  const imageUrls =
+    mem.sourceImageUrls?.length
+      ? mem.sourceImageUrls
+      : mem.scenes.flatMap((s) => s.imageUrls);
 
-  // Flip the flag immediately so the UI can show progress for unlocked rooms.
-  for (const scene of lockedScenes) {
-    updateMemScene(req.params.tourId, scene.id, {
-      locked: false,
-      generationStatus: "queued",
-      errorMessage: null,
-    });
-  }
-  mem.createdOnTier = tier;
-  mem.expiresAt = null;
-  mem.frozen = false;
-  mem.generationStatus = "processing";
-  mem.currentStage = `Resuming generation for ${lockedScenes.length} room${
-    lockedScenes.length === 1 ? "" : "s"
-  }…`;
-  rollupMemTourFromScenes(req.params.tourId);
-  queuePersistTourScenes(req.params.tourId);
+  res.json({ success: true, message: "Resuming tour generation…" });
 
-  // Respond fast — scene finalization runs in the background.
-  res.json({
-    success: true,
-    resumed: lockedScenes.length,
-    message: `Unlocking ${lockedScenes.length} more room${
-      lockedScenes.length === 1 ? "" : "s"
-    }…`,
-  });
-
-  void resumeLockedScenes({
+  void runFullTourPipeline({
     tourId: req.params.tourId,
+    userId,
+    imageUrls,
+    reqLog: req.log,
   });
-  return;
 });
-
-async function resumeLockedScenes(opts: { tourId: string }): Promise<void> {
-  const { tourId } = opts;
-  const mem = getMemTour(tourId);
-  if (!mem) return;
-
-  for (const scene of mem.scenes) {
-    if (!scene.locked) continue;
-    updateMemScene(tourId, scene.id, {
-      locked: false,
-      generationStatus: "queued",
-      errorMessage: null,
-    });
-  }
-
-  const imageUrls = mem.sourceImageUrls?.length
-    ? mem.sourceImageUrls
-    : mem.scenes.flatMap((s) => s.imageUrls);
-  if (imageUrls.length === 0) return;
-
-  const classifications = await classifyListingImages(imageUrls);
-  const groups = groupClassificationsIntoScenes(classifications);
-  if (groups.length === 0) return;
-
-  await runPanoramaGeneration(tourId, groups, mem.createdOnTier, {
-    info: () => {},
-    warn: () => {},
-    error: () => {},
-  });
-}
-
-// ─── Background pipeline ──────────────────────────────────────────────────────
-
-interface PipelineCtx {
-  tourId: string;
-  userId: string;
-  dbTourCreated: boolean;
-  imageUrls: string[];
-  processingStartedAt: Date;
-  userTier: SubscriptionTier;
-  reqLog: { info: Function; warn: Function; error: Function };
-}
-
-/**
- * Tour pipeline: Gemini classification → group by room → photo tour ready.
- */
-async function runGenerationPipeline(ctx: PipelineCtx): Promise<void> {
-  const { tourId, userId, dbTourCreated, imageUrls, userTier, reqLog } = ctx;
-
-  const memBefore = getMemTour(tourId);
-  if (memBefore) {
-    memBefore.currentStage = "Analyzing photos with AI…";
-    memBefore.generationStatus = "processing";
-  }
-  reqLog.info({ tourId, imageCount: imageUrls.length }, "Classifying images");
-
-  const classifications = await classifyListingImages(imageUrls, {
-    onBatch: (idx) => {
-      const m = getMemTour(tourId);
-      if (m) {
-        m.currentStage = `Analyzing photos with AI… (batch ${idx + 1})`;
-      }
-    },
-  });
-
-  const groups = groupClassificationsIntoScenes(classifications);
-  if (groups.length === 0) {
-    const m = getMemTour(tourId);
-    if (m) {
-      m.generationStatus = "failed";
-      m.errorMessage = "Couldn't classify any photos for tour generation";
-    }
-    return;
-  }
-
-  const isFree = !isPaidTier(userTier);
-  const scenes: MemScene[] = groups.map((g, idx) => ({
-    id: g.id,
-    label: g.label,
-    roomType: g.roomType,
-    thumbnailUrl: g.thumbnailUrl,
-    imageUrls: [g.worldImageUrl],
-    operationId: null,
-    worldId: null,
-    generationStatus: "queued",
-    generatedTourUrl: null,
-    errorMessage: null,
-    locked: isFree && idx > 0,
-  }));
-
-  const lockedCount = scenes.filter((s) => s.locked).length;
-
-  const memAfter = getMemTour(tourId);
-  if (memAfter) {
-    memAfter.scenes = scenes;
-    memAfter.currentStage =
-      lockedCount > 0
-        ? `Organizing 1 of ${scenes.length} rooms (free tier)…`
-        : `Organizing ${scenes.length} room${scenes.length === 1 ? "" : "s"}…`;
-    memAfter.previewImageUrl = scenes[0]?.thumbnailUrl ?? null;
-    memAfter.generationStatus = "processing";
-  }
-
-  queuePersistTourScenes(tourId);
-
-  reqLog.info(
-    {
-      tourId,
-      sceneCount: scenes.length,
-      lockedCount,
-      tier: userTier,
-      rooms: scenes.map((s) => `${s.label}${s.locked ? " [locked]" : ""}`),
-    },
-    "Created scenes",
-  );
-
-  await runPanoramaGeneration(tourId, groups, userTier, reqLog);
-
-  if (dbTourCreated) {
-    try {
-      await db
-        .update(profilesTable)
-        .set({
-          toursThisMonth: sql`tours_this_month + 1`,
-          totalTours: sql`total_tours + 1`,
-        })
-        .where(eq(profilesTable.id, userId));
-    } catch {
-      reqLog.warn("DB unavailable for profile counter update — skipping");
-    }
-  }
-}
 
 // ─── Simulation fallback ──────────────────────────────────────────────────────
 

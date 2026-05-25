@@ -12,6 +12,7 @@ import emailRouter from "./email";
 import scrapeListingRouter from "./scrape-listing";
 import classifyListingRouter from "./classify-listing";
 import testPanoramaRouter from "./test-panorama";
+import tourPipelineRouter from "./tour-pipeline";
 
 const router: IRouter = Router();
 
@@ -19,6 +20,7 @@ router.use(healthRouter);
 router.use(authRouter);
 router.use(userRouter);
 router.use(toursRouter);
+router.use(tourPipelineRouter);
 router.use(generateTourRouter);
 router.use(leadsRouter);
 router.use(analyticsRouter);

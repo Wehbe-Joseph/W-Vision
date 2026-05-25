@@ -84,7 +84,7 @@ export default function TourViewer() {
       }));
   }, [tour?.rooms, tour?.scenes]);
 
-  const isFreetier = !Boolean(tour?.isFullHouse);
+  const isFreetier = false;
 
   const [showLeadModal, setShowLeadModal] = useState(false);
   const [leadLoading, setLeadLoading] = useState(false);

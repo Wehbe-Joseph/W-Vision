@@ -51,18 +51,12 @@ function stageIndex(status: GenStatus) {
   return 0;
 }
 
-/**
- * Stage messages cycled through during the "Working through your home" screen.
- * Backend doesn't surface granular Spatial AI engine stages, so we display a synthetic
- * sequence that loops while the user waits. Each step has a hint icon.
- */
-const WORK_STAGES = [
-  { label: "Analyzing your photos",   icon: Scan },
-  { label: "Detecting rooms",         icon: Home },
-  { label: "Mapping spatial layout",  icon: Layers },
-  { label: "Selecting best photos",   icon: Globe },
-  { label: "Organizing your tour",    icon: Palette },
-  { label: "Polishing your tour",     icon: Sparkles },
+/** Live pipeline stages (matches backend `pipelineStage` 1–4). */
+const PIPELINE_STAGES = [
+  { stage: 1, label: "Extracting photos", icon: ImageIcon },
+  { stage: 2, label: "Classifying rooms with AI", icon: Scan },
+  { stage: 3, label: "Generating panoramas", icon: Home },
+  { stage: 4, label: "Building your tour", icon: Sparkles },
 ] as const;
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -87,6 +81,9 @@ export default function NewTour() {
   const [processingImages, setProcessingImages] = useState<string[]>([]);
   // Per-room scenes from the backend (Gemini classification + Spatial AI dispatch).
   // Populated as the status endpoint reports progress.
+  const [pipelineStage, setPipelineStage] = useState(1);
+  const [roomsTotal, setRoomsTotal] = useState(0);
+  const [roomsReady, setRoomsReady] = useState(0);
   const [scenes, setScenes] = useState<
     Array<{
       id: string;
@@ -386,7 +383,7 @@ export default function NewTour() {
   const { data: statusData } = useGetGenerationStatus(tourId as string, {
     query: {
       enabled: !!tourId && step === 2,
-      refetchInterval: 2500,
+      refetchInterval: 5000,
       queryKey: ["gen-status", tourId],
     },
   });
@@ -398,6 +395,9 @@ export default function NewTour() {
     // cast through unknown so we can pick it up without regenerating the
     // OpenAPI client.
     const extendedStatus = statusData as unknown as {
+      pipelineStage?: number;
+      roomsTotal?: number;
+      roomsReady?: number;
       scenes?: Array<{
         id: string;
         label: string;
@@ -408,6 +408,15 @@ export default function NewTour() {
         generatedTourUrl: string | null;
       }>;
     };
+    if (extendedStatus.pipelineStage) {
+      setPipelineStage(extendedStatus.pipelineStage);
+    }
+    if (extendedStatus.roomsTotal != null) {
+      setRoomsTotal(extendedStatus.roomsTotal);
+    }
+    if (extendedStatus.roomsReady != null) {
+      setRoomsReady(extendedStatus.roomsReady);
+    }
     setResult((prev) => {
       if (!prev) return prev;
       const nextStatus: GenStatus =
@@ -439,17 +448,6 @@ export default function NewTour() {
 
   const shareUrl = result ? `${window.location.origin}/tour/${result.shareToken}` : "";
 
-  // Cycle a synthetic "work stage" every 4s while step 2 is visible so the
-  // user sees motion even if the backend doesn't push fine-grained progress.
-  const [workStageIndex, setWorkStageIndex] = useState(0);
-  useEffect(() => {
-    if (step !== 2) return;
-    const id = window.setInterval(() => {
-      setWorkStageIndex((i) => (i + 1) % WORK_STAGES.length);
-    }, 4000);
-    return () => window.clearInterval(id);
-  }, [step]);
-
   // Highlight one image at a time in the scanning gallery (rotates every 2s).
   const [scanIndex, setScanIndex] = useState(0);
   useEffect(() => {
@@ -459,11 +457,6 @@ export default function NewTour() {
     }, 2000);
     return () => window.clearInterval(id);
   }, [step, processingImages.length]);
-
-  const currentWorkStage = useMemo(
-    () => WORK_STAGES[workStageIndex],
-    [workStageIndex],
-  );
 
   return (
     <div className="flex-1 flex items-start justify-center p-6 relative">
@@ -667,7 +660,7 @@ export default function NewTour() {
                   ) : generateMutation.isPending ? (
                     <><Loader2 className="mr-2 w-4 h-4 animate-spin" /> Starting generation…</>
                   ) : (
-                    "Generate 3D Tour →"
+                    "Generate Tour →"
                   )}
                 </Button>
                 {!canSubmit && (
@@ -742,18 +735,12 @@ export default function NewTour() {
                             listing scrape over the synthetic stage label. */}
                         <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2">
                           <div className="bg-background/95 border-2 border-foreground px-2.5 py-1.5 flex items-center gap-2">
-                            {(() => {
-                              const StageIcon = currentWorkStage.icon;
-                              return <StageIcon className="w-3.5 h-3.5 text-primary" />;
-                            })()}
+                            <Loader2 className="w-3.5 h-3.5 text-primary animate-spin" />
                             <span className="text-[11px] font-mono font-bold uppercase tracking-widest">
-                              {(() => {
-                                const src = processingImages[scanIndex];
-                                const label = src ? apifyImageLabels[src] : null;
-                                return label
-                                  ? `Analyzing: ${label}`
-                                  : currentWorkStage.label;
-                              })()}
+                              {result.currentStage ??
+                                PIPELINE_STAGES.find((s) => s.stage === pipelineStage)
+                                  ?.label ??
+                                "Processing…"}
                             </span>
                           </div>
                           <div className="bg-foreground border-2 border-foreground px-2 py-1 text-[10px] font-mono text-background uppercase tracking-widest">
@@ -823,12 +810,12 @@ export default function NewTour() {
                     </p>
                   </div>
 
-                  {/* Live stage list */}
+                  {/* Live pipeline stages */}
                   <ul className="space-y-1.5">
-                    {WORK_STAGES.map((s, i) => {
+                    {PIPELINE_STAGES.map((s) => {
                       const Icon = s.icon;
-                      const done = i < workStageIndex;
-                      const active = i === workStageIndex;
+                      const done = pipelineStage > s.stage;
+                      const active = pipelineStage === s.stage;
                       return (
                         <li
                           key={s.label}
@@ -872,6 +859,15 @@ export default function NewTour() {
                       );
                     })}
                   </ul>
+
+                  {pipelineStage >= 3 && result.currentStage && (
+                    <p className="text-xs font-mono text-primary border-l-2 border-primary pl-3">
+                      {result.currentStage}
+                      {roomsTotal > 0
+                        ? ` · ${roomsReady} of ${roomsTotal} rooms`
+                        : ""}
+                    </p>
+                  )}
 
                   {/* Detected rooms — shows up once Gemini classification lands */}
                   {scenes.length > 0 && (
@@ -938,8 +934,7 @@ export default function NewTour() {
 
                   <p className="text-[11px] text-muted-foreground font-mono leading-relaxed">
                     Safe to close this window — generation continues in the
-                    background and we'll surface it on your dashboard when it's
-                    ready.
+                    background. You'll get an email when your tour is ready.
                   </p>
                 </div>
               </div>

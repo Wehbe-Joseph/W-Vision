@@ -1,6 +1,6 @@
 import { db } from "@workspace/db";
 import { toursTable, tourPhotosTable } from "@workspace/db";
-import { and, eq } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 import type { SceneGroup } from "../services/imageClassifier/grouping";
 import { selectBestPhotoForRoom } from "../services/imageClassifier/grouping";
 import { generatePanorama } from "./panorama";
@@ -8,66 +8,12 @@ import {
   getMemTour,
   updateMemScene,
   rollupMemTourFromScenes,
-  type MemScene,
 } from "./tourMemoryStore";
 import { queuePersistTourScenes } from "./tourScenesPersistence";
-import { isPaidTier, type SubscriptionTier } from "./userMemoryStore";
+import { sortRoomTypes } from "./roomOrder";
 import { logger } from "./logger";
 
 type ReqLog = { info: Function; warn: Function; error: Function };
-
-function bestCombinedScore(group: SceneGroup): number {
-  const best = selectBestPhotoForRoom(group.classifications);
-  return best?.combinedScore ?? 0;
-}
-
-async function upsertBestPhotoRows(
-  tourId: string,
-  groups: SceneGroup[],
-): Promise<void> {
-  for (const g of groups) {
-    const best = selectBestPhotoForRoom(g.classifications);
-    if (!best) continue;
-
-    const existing = await db
-      .select({ id: tourPhotosTable.id })
-      .from(tourPhotosTable)
-      .where(
-        and(
-          eq(tourPhotosTable.tourId, tourId),
-          eq(tourPhotosTable.roomLabel, g.roomType),
-        ),
-      )
-      .limit(1);
-
-    if (existing[0]) {
-      await db
-        .update(tourPhotosTable)
-        .set({
-          originalUrl: best.imageUrl,
-          thumbnailUrl: best.imageUrl,
-          isBestForRoom: true,
-          qualityScore: Math.round(best.qualityScore),
-          confidenceScore: best.confidence,
-          panoramaStatus: "pending",
-        })
-        .where(eq(tourPhotosTable.id, existing[0].id));
-    } else {
-      await db.insert(tourPhotosTable).values({
-        tourId,
-        roomLabel: g.roomType,
-        originalUrl: best.imageUrl,
-        thumbnailUrl: best.imageUrl,
-        floorNumber: 1,
-        qualityScore: Math.round(best.qualityScore),
-        isSelected: true,
-        isBestForRoom: true,
-        confidenceScore: best.confidence,
-        panoramaStatus: "pending",
-      });
-    }
-  }
-}
 
 async function setPhotoPanorama(
   tourId: string,
@@ -84,59 +30,72 @@ async function setPhotoPanorama(
     .where(
       and(
         eq(tourPhotosTable.tourId, tourId),
-        eq(tourPhotosTable.roomLabel, roomType),
+        or(
+          eq(tourPhotosTable.roomType, roomType),
+          eq(tourPhotosTable.roomLabel, roomType),
+        ),
         eq(tourPhotosTable.isBestForRoom, true),
       ),
     );
 }
 
 /**
- * After Gemini classification: generate OpenAI panoramas per tier,
- * update tour_photos + tours, and sync mem scenes with panorama URLs.
+ * Generate OpenAI panoramas for every room (sequential, full house).
  */
 export async function runPanoramaGeneration(
   tourId: string,
   groups: SceneGroup[],
-  userTier: SubscriptionTier,
   reqLog: ReqLog,
 ): Promise<void> {
   const mem = getMemTour(tourId);
   if (!mem) return;
 
-  const isPaid = isPaidTier(userTier);
-  const sorted = [...groups].sort(
-    (a, b) => bestCombinedScore(b) - bestCombinedScore(a),
-  );
-  const roomsToGenerate = isPaid ? sorted : sorted.slice(0, 1);
+  const roomsToGenerate = sortRoomTypes(
+    groups.map((g) => ({ roomType: g.roomType, group: g })),
+  ).map((x) => x.group);
+
   const totalRooms = roomsToGenerate.length;
+  let roomsReady = 0;
 
   try {
-    await upsertBestPhotoRows(tourId, groups);
-  } catch (err) {
-    reqLog.warn({ err, tourId }, "Could not upsert tour_photos — continuing");
+    await db
+      .update(toursTable)
+      .set({
+        panoramaStatus: "processing",
+        tourType: "panorama",
+        isFullHouse: true,
+        roomsReady: 0,
+        roomsDetected: totalRooms,
+        generationStatus: "processing",
+        status: "processing",
+      })
+      .where(eq(toursTable.id, tourId));
+  } catch {
+    /* continue */
   }
 
-  await db
-    .update(toursTable)
-    .set({
-      panoramaStatus: "processing",
-      tourType: "panorama",
-      isFullHouse: isPaid,
-      roomsReady: 0,
-      generationStatus: "processing",
-      status: "processing",
-    })
-    .where(eq(toursTable.id, tourId));
-
-  let roomsReady = 0;
+  mem.pipelineStage = 3;
+  mem.roomsDetected = totalRooms;
 
   for (let i = 0; i < roomsToGenerate.length; i++) {
     const g = roomsToGenerate[i]!;
-    const imageUrl = g.worldImageUrl;
     const roomType = g.roomType;
+    const imageUrl = g.worldImageUrl;
+    const n = i + 1;
 
-    mem.currentStage = `Generating 360° panorama for ${roomType}…`;
+    const stageMsg = `Generating ${roomType}... (${n} of ${totalRooms})`;
+    mem.currentStage = stageMsg;
+    mem.roomsReady = roomsReady;
     queuePersistTourScenes(tourId);
+
+    try {
+      await db
+        .update(toursTable)
+        .set({ currentStage: stageMsg, roomsReady })
+        .where(eq(toursTable.id, tourId));
+    } catch {
+      /* ignore */
+    }
 
     const panoramaUrl = await generatePanorama(imageUrl, roomType, tourId);
 
@@ -158,11 +117,6 @@ export async function runPanoramaGeneration(
           errorMessage: null,
         });
       }
-
-      mem.currentStage =
-        totalRooms > 1
-          ? `Generated ${roomType} — ${roomsReady} of ${totalRooms} rooms complete`
-          : `Generated ${roomType}`;
     } else {
       try {
         await setPhotoPanorama(tourId, roomType, null, "failed");
@@ -176,26 +130,25 @@ export async function runPanoramaGeneration(
           errorMessage: "Panorama generation failed",
         });
       }
-      reqLog.warn({ tourId, roomType }, "Panorama generation returned null");
+      reqLog.warn({ tourId, roomType }, "Panorama skipped — continuing");
     }
 
+    mem.roomsReady = roomsReady;
     try {
       await db
         .update(toursTable)
-        .set({
-          roomsReady,
-          currentStage: mem.currentStage,
-        })
+        .set({ roomsReady, currentStage: mem.currentStage })
         .where(eq(toursTable.id, tourId));
     } catch {
-      /* memory is source of truth during outage */
+      /* ignore */
     }
   }
 
   const anyReady = roomsReady > 0;
-  mem.roomsReady = roomsReady;
   mem.generationStatus = anyReady ? "completed" : "failed";
   mem.panoramaStatus = anyReady ? "ready" : "failed";
+  mem.pipelineStage = anyReady ? 4 : 3;
+
   if (anyReady) {
     mem.completedAt = Date.now();
     mem.currentStage = "Tour ready";
@@ -205,7 +158,7 @@ export async function runPanoramaGeneration(
       mem.previewImageUrl ?? mem.scenes[0]?.thumbnailUrl ?? null;
   } else {
     mem.errorMessage = "Could not generate any panoramas";
-    mem.currentStage = "Generation failed";
+    mem.currentStage = "Some rooms could not be generated";
   }
 
   rollupMemTourFromScenes(tourId);
@@ -219,19 +172,18 @@ export async function runPanoramaGeneration(
         panoramaStatus: anyReady ? "ready" : "failed",
         generationStatus: anyReady ? "completed" : "failed",
         roomsReady,
+        roomsDetected: totalRooms,
         processingCompletedAt: anyReady ? new Date() : undefined,
         currentStage: mem.currentStage,
         generatedTourUrl: mem.generatedTourUrl,
         previewImageUrl: mem.previewImageUrl ?? undefined,
         errorMessage: anyReady ? null : mem.errorMessage,
+        isFullHouse: true,
       })
       .where(eq(toursTable.id, tourId));
   } catch (err) {
     logger.warn({ err, tourId }, "Final tour panorama status not persisted");
   }
 
-  reqLog.info(
-    { tourId, roomsReady, totalRooms, isPaid },
-    "Panorama generation finished",
-  );
+  reqLog.info({ tourId, roomsReady, totalRooms }, "Panorama generation finished");
 }

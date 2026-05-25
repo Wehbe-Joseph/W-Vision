@@ -1,6 +1,7 @@
 export {
   classifyListingImage,
   classifyListingImages,
+  filterClassificationsForTour,
   ROOM_TYPES,
   type ImageClassification,
   type RoomType,

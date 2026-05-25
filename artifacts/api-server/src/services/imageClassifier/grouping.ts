@@ -1,4 +1,5 @@
 import { type ImageClassification } from "./gemini";
+import { roomNavRank } from "../../lib/roomOrder";
 
 /**
  * One room in the tour. Each group keeps the single best photo for display.
@@ -18,21 +19,6 @@ export interface SceneGroup {
   /** True when the selected photo passed Gemini's quality filter. */
   recommendedFor3d: boolean;
 }
-
-const ROOM_PRIORITY: Record<ImageClassification["roomType"], number> = {
-  "Living Room": 1,
-  "Kitchen": 2,
-  "Master Bedroom": 3,
-  "Bedroom": 4,
-  "Dining Room": 5,
-  "Bathroom": 6,
-  "Hallway": 7,
-  "Balcony": 8,
-  "Garden": 9,
-  "Garage": 10,
-  "Exterior": 11,
-  "Other": 12,
-};
 
 function slugify(label: string): string {
   return label
@@ -87,6 +73,6 @@ export function groupClassificationsIntoScenes(
   }
 
   return groups.sort(
-    (a, b) => ROOM_PRIORITY[a.roomType] - ROOM_PRIORITY[b.roomType],
+    (a, b) => roomNavRank(a.roomType) - roomNavRank(b.roomType),
   );
 }

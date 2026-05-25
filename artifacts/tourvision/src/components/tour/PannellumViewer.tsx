@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { roomNavRank } from "@/lib/roomOrder";
 
 declare global {
   interface Window {
@@ -24,7 +25,8 @@ interface Room {
 
 interface PannellumViewerProps {
   rooms: Room[];
-  isFreetier: boolean;
+  /** @deprecated Tier restrictions disabled — always full house */
+  isFreetier?: boolean;
 }
 
 const PANNELLUM_CSS =
@@ -38,17 +40,26 @@ function sceneIdFromRoomType(roomType: string): string {
 
 export default function PannellumViewer({
   rooms,
-  isFreetier,
+  isFreetier: _isFreetier = false,
 }: PannellumViewerProps) {
+  const orderedRooms = useMemo(
+    () =>
+      [...rooms].sort(
+        (a, b) => roomNavRank(a.roomType) - roomNavRank(b.roomType),
+      ),
+    [rooms],
+  );
   const viewerRef = useRef<ReturnType<Window["pannellum"]["viewer"]> | null>(
     null,
   );
   const containerRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [currentRoom, setCurrentRoom] = useState(rooms[0]?.roomType || "");
+  const [currentRoom, setCurrentRoom] = useState(
+    orderedRooms[0]?.roomType || "",
+  );
 
   useEffect(() => {
-    if (!rooms.length || !containerRef.current) return;
+    if (!orderedRooms.length || !containerRef.current) return;
 
     let link: HTMLLinkElement | null = null;
     let script: HTMLScriptElement | null = null;
@@ -82,16 +93,6 @@ export default function PannellumViewer({
           });
         }
 
-        if (isFreetier && roomList.length === 1) {
-          hotspots.push({
-            pitch: -10,
-            yaw: 90,
-            type: "info",
-            text: "🔒 Unlock full house — $55",
-            cssClass: "wvision-hotspot-locked",
-          });
-        }
-
         scenes[sceneIdFromRoomType(room.roomType)] = {
           title: room.roomType,
           panorama: room.panoramaUrl,
@@ -105,8 +106,8 @@ export default function PannellumViewer({
     function initViewer() {
       if (cancelled || !window.pannellum || !containerRef.current) return;
 
-      const scenes = buildScenes(rooms);
-      const firstSceneId = sceneIdFromRoomType(rooms[0]!.roomType);
+      const scenes = buildScenes(orderedRooms);
+      const firstSceneId = sceneIdFromRoomType(orderedRooms[0]!.roomType);
 
       viewerRef.current = window.pannellum.viewer(containerRef.current, {
         default: {
@@ -123,7 +124,7 @@ export default function PannellumViewer({
       });
 
       viewerRef.current.on("scenechange", (sceneId: string) => {
-        const room = rooms.find(
+        const room = orderedRooms.find(
           (r) => sceneIdFromRoomType(r.roomType) === sceneId,
         );
         if (room) setCurrentRoom(room.roomType);
@@ -156,7 +157,7 @@ export default function PannellumViewer({
       if (link?.parentNode) link.parentNode.removeChild(link);
       if (script?.parentNode) script.parentNode.removeChild(script);
     };
-  }, [rooms, isFreetier]);
+  }, [orderedRooms]);
 
   return (
     <div
@@ -227,42 +228,6 @@ export default function PannellumViewer({
           }}
         >
           {currentRoom}
-          {isFreetier && (
-            <span style={{ color: "#2563EB", marginLeft: 8 }}>
-              · Free Preview
-            </span>
-          )}
-        </div>
-      )}
-
-      {isFreetier && !isLoading && (
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={() => {
-            window.location.href = "/upgrade";
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") window.location.href = "/upgrade";
-          }}
-          style={{
-            position: "fixed",
-            bottom: 80,
-            left: "50%",
-            transform: "translateX(-50%)",
-            background: "rgba(37,99,235,0.95)",
-            color: "white",
-            padding: "12px 24px",
-            borderRadius: 12,
-            fontSize: 13,
-            fontFamily: "Inter, sans-serif",
-            cursor: "pointer",
-            zIndex: 50,
-            whiteSpace: "nowrap",
-            boxShadow: "0 4px 20px rgba(37,99,235,0.4)",
-          }}
-        >
-          🔒 Unlock full house walkthrough — $55 one time →
         </div>
       )}
 

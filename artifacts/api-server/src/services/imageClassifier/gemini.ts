@@ -48,8 +48,9 @@ export interface ImageClassification {
   roomType: RoomType;
   qualityScore: number;
   wowFactor: number;
-  /** quality_score + wow_factor — used to pick one photo per room. */
+  /** (quality_score + wow_factor) / 2 — used to pick one photo per room. */
   combinedScore: number;
+  isPropertyPhoto: boolean;
   isInterior: boolean;
   isWideAngle: boolean;
   recommendedFor3d: boolean;
@@ -80,10 +81,15 @@ No code blocks. Pure JSON only.
     "Hallway" | "Other",
   "quality_score": number 1-10,
   "wow_factor": number 1-10,
+  "is_property_photo": boolean,
   "is_interior": boolean,
   "is_wide_angle": boolean,
   "recommended_for_3d": boolean
 }
+
+is_property_photo = false for logos, watermarks, floor plans, 
+screenshots of the listing UI, maps, or non-property images.
+true for actual interior/exterior photos of the home.
 
 quality_score rules:
 10 = bright, sharp, wide angle, beautiful, no clutter
@@ -223,6 +229,13 @@ export async function classifyListingImages(
   return out;
 }
 
+/** Drop logos, UI screenshots, and low-quality photos before grouping. */
+export function filterClassificationsForTour(
+  items: ImageClassification[],
+): ImageClassification[] {
+  return items.filter((c) => c.isPropertyPhoto && c.qualityScore >= 4);
+}
+
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
 async function fetchImageAsBase64(
@@ -259,12 +272,15 @@ function parseClassification(
     const roomType = normalizeRoomType(raw.room_type);
     const qualityScore = clampNum(raw.quality_score, 1, 10, 5);
     const wowFactor = clampNum(raw.wow_factor, 1, 10, 5);
+    const isPropertyPhoto =
+      typeof raw.is_property_photo === "boolean" ? raw.is_property_photo : true;
     return {
       imageUrl,
       roomType,
       qualityScore,
       wowFactor,
-      combinedScore: qualityScore + wowFactor,
+      combinedScore: (qualityScore + wowFactor) / 2,
+      isPropertyPhoto,
       isInterior: typeof raw.is_interior === "boolean" ? raw.is_interior : true,
       isWideAngle:
         typeof raw.is_wide_angle === "boolean" ? raw.is_wide_angle : false,
@@ -305,7 +321,8 @@ function synthesizeFallback(
     roomType: "Other",
     qualityScore: 5,
     wowFactor: 5,
-    combinedScore: 10,
+    combinedScore: 5,
+    isPropertyPhoto: true,
     isInterior: true,
     isWideAngle: false,
     recommendedFor3d: false,

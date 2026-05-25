@@ -61,6 +61,9 @@ export interface MemTour {
   sourceImageUrls?: string[];
   panoramaStatus?: "pending" | "processing" | "ready" | "failed";
   roomsReady?: number;
+  roomsDetected?: number;
+  /** UI progress: 1=extract 2=classify 3=panorama 4=ready */
+  pipelineStage?: 1 | 2 | 3 | 4;
 }
 
 const TOURS = new Map<string, MemTour>();
