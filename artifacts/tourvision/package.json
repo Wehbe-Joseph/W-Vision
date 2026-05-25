@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --config vite.config.ts --host 0.0.0.0",
     "build": "vite build --config vite.config.ts",
+    "vercel-build": "cd ../.. && pnpm --filter @workspace/api-server build && cp artifacts/api-server/dist/serverless.mjs artifacts/tourvision/api/serverless.mjs && pnpm --filter @workspace/tourvision build",
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

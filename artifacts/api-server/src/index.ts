@@ -5,10 +5,23 @@ import { fileURLToPath } from "url";
 const apiServerRoot = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(apiServerRoot, "..", ".env") });
 dotenv.config({ path: path.join(apiServerRoot, "..", ".env.local") });
-import app from "./app";
-import { logger } from "./lib/logger";
-import { ensureTourImagesBucket } from "./lib/imageStorage";
-import { sweepExpiredTours } from "./lib/tourMemoryStore";
+
+// Dynamic imports so dotenv runs before app/supabase modules initialize.
+const { default: app } = await import("./app.js");
+const { logger } = await import("./lib/logger.js");
+const { getSupabaseAuth, getSupabaseAdmin } = await import("./lib/supabaseAdmin.js");
+const { ensureTourImagesBucket } = await import("./lib/imageStorage.js");
+const { sweepExpiredTours } = await import("./lib/tourMemoryStore.js");
+
+if (!getSupabaseAuth()) {
+  logger.warn(
+    "Supabase auth client not configured (SUPABASE_URL + SUPABASE_ANON_KEY). Protected routes will return 401.",
+  );
+} else if (!getSupabaseAdmin()) {
+  logger.warn(
+    "Supabase admin client not configured (SUPABASE_SERVICE_ROLE_KEY). Image uploads may fail.",
+  );
+}
 
 const rawPort = process.env["PORT"] ?? "8080";
 

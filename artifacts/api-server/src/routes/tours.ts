@@ -28,7 +28,9 @@ import {
   type MemScene,
 } from "../lib/tourMemoryStore";
 import { mapDbScenesToPublicLike } from "../lib/tourScenesPersistence";
+import { requireProfileId } from "../lib/resolveProfileId";
 import { FREE_TIER_TTL_MS } from "../lib/userMemoryStore";
+import { addRoomToTour } from "../lib/addTourRoom";
 
 const router = Router();
 
@@ -135,6 +137,10 @@ function mapTour(t: typeof toursTable.$inferSelect) {
 }
 
 function mapPublicScene(s: MemScene) {
+  const panorama =
+    s.generatedTourUrl && s.generationStatus === "completed"
+      ? s.generatedTourUrl
+      : null;
   return {
     id: s.id,
     label: s.label,
@@ -142,8 +148,8 @@ function mapPublicScene(s: MemScene) {
     thumbnailUrl: s.thumbnailUrl,
     imageCount: s.imageUrls.length,
     generationStatus: s.generationStatus,
-    generatedTourUrl: s.thumbnailUrl,
-    worldEmbedUrl: s.thumbnailUrl,
+    generatedTourUrl: panorama ?? s.thumbnailUrl,
+    worldEmbedUrl: panorama ?? s.thumbnailUrl,
     worldId: null,
     locked: s.locked,
   };
@@ -151,18 +157,39 @@ function mapPublicScene(s: MemScene) {
 
 /** Scenes for share link once memory is gone — read from Postgres JSON. */
 function mapDbStoredScenesToPublic(raw: unknown) {
-  return mapDbScenesToPublicLike(raw).map((s) => ({
-    id: s.id,
-    label: s.label,
-    roomType: s.roomType,
-    thumbnailUrl: s.thumbnailUrl,
-    imageCount: s.imageCount,
-    generationStatus: s.generationStatus,
-    generatedTourUrl: s.thumbnailUrl,
-    worldEmbedUrl: s.thumbnailUrl,
-    worldId: null,
-    locked: s.locked,
-  }));
+  return mapDbScenesToPublicLike(raw).map((s) => {
+    const panorama =
+      s.generatedTourUrl && s.generationStatus === "completed"
+        ? s.generatedTourUrl
+        : null;
+    return {
+      id: s.id,
+      label: s.label,
+      roomType: s.roomType,
+      thumbnailUrl: s.thumbnailUrl,
+      imageCount: s.imageCount,
+      generationStatus: s.generationStatus,
+      generatedTourUrl: panorama ?? s.thumbnailUrl,
+      worldEmbedUrl: panorama ?? s.thumbnailUrl,
+      worldId: s.worldId,
+      locked: s.locked,
+    };
+  });
+}
+
+/** Public viewer needs one row per room label — DB may mark multiple `isBestForRoom`. */
+function dedupeRoomsByLabel(
+  rows: (typeof tourPhotosTable.$inferSelect)[],
+): (typeof tourPhotosTable.$inferSelect)[] {
+  const byLabel = new Map<string, typeof tourPhotosTable.$inferSelect>();
+  for (const row of rows) {
+    const key = (row.roomLabel || "room").trim().toLowerCase();
+    const prev = byLabel.get(key);
+    if (!prev || (row.qualityScore ?? 0) > (prev.qualityScore ?? 0)) {
+      byLabel.set(key, row);
+    }
+  }
+  return Array.from(byLabel.values());
 }
 
 function mapRoom(p: typeof tourPhotosTable.$inferSelect) {
@@ -373,10 +400,13 @@ router.get("/tours", async (req, res) => {
 
 // GET /tours/recent
 router.get("/tours/recent", async (req, res) => {
-  const userId =
-    (req.user as { profileId?: string } | undefined)?.profileId ??
-    (req.headers["x-user-id"] as string | undefined);
-  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+  const userId = await requireProfileId(req);
+  if (!userId) {
+    return res.status(401).json({
+      error: "Unauthorized",
+      message: "Sign in required.",
+    });
+  }
 
   try {
     const tours = await db
@@ -396,10 +426,13 @@ router.get("/tours/recent", async (req, res) => {
 
 // GET /tours/stats
 router.get("/tours/stats", async (req, res) => {
-  const userId =
-    (req.user as { profileId?: string } | undefined)?.profileId ??
-    (req.headers["x-user-id"] as string | undefined);
-  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+  const userId = await requireProfileId(req);
+  if (!userId) {
+    return res.status(401).json({
+      error: "Unauthorized",
+      message: "Sign in required.",
+    });
+  }
 
   let tier = "free";
   let toursThisMonth: number | null = null;
@@ -590,6 +623,76 @@ router.put("/tours/:tourId/rooms", async (req, res) => {
     }
 
     return res.json({ success: true, message: "Floor assignments updated" });
+  } catch (err) {
+    req.log.error(err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /tours/:tourId/rooms/add — classify uploads, name room, generate 360°
+router.post("/tours/:tourId/rooms/add", async (req, res) => {
+  try {
+    const userId = await requireProfileId(req);
+    if (!userId) {
+      return res.status(401).json({
+        error: "Unauthorized",
+        message: "Sign in to add rooms to this tour.",
+      });
+    }
+
+    const tourId = req.params.tourId;
+    const body = req.body as {
+      imageUrls?: unknown;
+      uploadedImages?: { name?: string; dataUrl?: string }[];
+    };
+
+    const imageUrls = Array.isArray(body.imageUrls)
+      ? body.imageUrls.filter((u): u is string => typeof u === "string")
+      : [];
+    const uploadedImages = Array.isArray(body.uploadedImages)
+      ? body.uploadedImages
+          .filter(
+            (x) =>
+              x &&
+              typeof x.dataUrl === "string" &&
+              x.dataUrl.startsWith("data:image/"),
+          )
+          .map((x) => ({
+            name: typeof x.name === "string" ? x.name : "upload.jpg",
+            dataUrl: x.dataUrl!,
+          }))
+      : [];
+
+    if (imageUrls.length === 0 && uploadedImages.length === 0) {
+      return res.status(400).json({ error: "Provide imageUrls or uploadedImages" });
+    }
+
+    const result = await addRoomToTour({
+      tourId,
+      userId,
+      imageUrls,
+      uploadedImages,
+      req,
+      reqLog: req.log,
+    });
+
+    if (!result.ok) {
+      return res.status(result.status).json({ error: result.error });
+    }
+
+    return res.json({
+      success: true,
+      room: {
+        id: result.photoId,
+        sceneId: result.sceneId,
+        roomType: result.roomType,
+        label: result.label,
+        panoramaUrl: result.panoramaUrl,
+        thumbnailUrl: result.thumbnailUrl,
+        panoramaStatus: "ready",
+        isAiGenerated: true,
+      },
+    });
   } catch (err) {
     req.log.error(err);
     return res.status(500).json({ error: "Internal server error" });
@@ -789,7 +892,7 @@ router.get("/tours/public/:shareToken", async (req, res) => {
       panoramaStatus: tour.panoramaStatus ?? "pending",
       roomsReady: tour.roomsReady ?? 0,
       tourType: tour.tourType ?? "panorama",
-      rooms: rooms.map(mapRoom),
+      rooms: dedupeRoomsByLabel(rooms).map(mapRoom),
       confidenceScore: tour.confidenceScore,
       realAngles: tour.realAngles,
       aiHighAngles: tour.aiHighAngles,

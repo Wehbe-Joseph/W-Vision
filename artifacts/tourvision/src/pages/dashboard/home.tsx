@@ -18,10 +18,15 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 
 export default function DashboardHome() {
-  const { user } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
-  const { data: stats, isLoading: statsLoading } = useGetTourStats();
-  const { data: recentToursData, isLoading: toursLoading } = useGetRecentTours();
+  const authReady = isAuthenticated && !authLoading;
+  const { data: stats, isLoading: statsLoading } = useGetTourStats({
+    query: { enabled: authReady },
+  });
+  const { data: recentToursData, isLoading: toursLoading } = useGetRecentTours({
+    query: { enabled: authReady },
+  });
   const [url, setUrl] = useState("");
 
   const handleQuickGenerate = (e: React.FormEvent) => {

@@ -18,6 +18,7 @@ import { runPanoramaGeneration } from "./panoramaPipeline";
 import { notifyAgentTourReady } from "./tourNotify";
 import { queuePersistTourScenes } from "./tourScenesPersistence";
 import { logger } from "./logger";
+import { filterListingImageUrls } from "./listingImageFilter";
 
 export type PipelineStage = 1 | 2 | 3 | 4;
 
@@ -107,7 +108,9 @@ export async function runFullTourPipeline(opts: {
   const mem = getMemTour(tourId);
   if (!mem || mem.userId !== userId) return;
 
-  const httpsUrls = imageUrls.filter((u) => u.startsWith("https://"));
+  const httpsUrls = filterListingImageUrls(
+    imageUrls.filter((u) => u.startsWith("https://")),
+  );
   mem.sourceImageUrls = httpsUrls;
   await saveTourSourceImages(tourId, httpsUrls, mem);
 

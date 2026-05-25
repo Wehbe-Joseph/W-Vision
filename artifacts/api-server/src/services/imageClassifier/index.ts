@@ -6,4 +6,8 @@ export {
   type ImageClassification,
   type RoomType,
 } from "./gemini";
-export { groupClassificationsIntoScenes, type SceneGroup } from "./grouping";
+export {
+  groupClassificationsIntoScenes,
+  selectBestPhotoForRoom,
+  type SceneGroup,
+} from "./grouping";

@@ -10,15 +10,21 @@ import {
   getMemTour,
   type MemScene,
 } from "../lib/tourMemoryStore";
-import { persistedScenesToMemScenes } from "../lib/tourScenesPersistence";
+import {
+  persistedScenesToMemScenes,
+  persistTourSourceImagesToDb,
+} from "../lib/tourScenesPersistence";
 import {
   advanceTourGeneration,
+  hydrateMemTourFromDb,
   saveTourSourceImages,
 } from "../lib/tourGenerationDriver";
 import { runFullTourPipeline } from "../lib/tourPipeline";
 import { setMemUserTier } from "../lib/userMemoryStore";
 import { PIPELINE_STAGE_LABELS } from "../lib/tourPipeline";
 import { GenerateTourBody } from "@workspace/api-zod";
+import { requireProfileId } from "../lib/resolveProfileId";
+import { filterListingImageUrls } from "../lib/listingImageFilter";
 
 const router = Router();
 
@@ -37,11 +43,13 @@ function detectPlatform(url: string): string {
 // POST /generate-tour
 router.post("/generate-tour", async (req, res) => {
   try {
-    const userId =
-      (req.user as { profileId?: string; id?: string } | undefined)?.profileId ??
-      (req.user as { id?: string } | undefined)?.id ??
-      (req.headers["x-user-id"] as string | undefined);
-    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    const userId = await requireProfileId(req);
+    if (!userId) {
+      return res.status(401).json({
+        error: "Unauthorized",
+        message: "Sign in required to generate a tour.",
+      });
+    }
 
     const parsed = GenerateTourBody.safeParse(req.body);
     if (!parsed.success) {
@@ -72,17 +80,15 @@ router.post("/generate-tour", async (req, res) => {
     // Convert any inline base64 uploaded images into Supabase Storage URLs.
     const uploadedPublicUrls: string[] = (
       await Promise.all(
-        uploadedImages
-          .slice(0, 8)
-          .map((img) => uploadDataUrlToStorage(img.dataUrl, userId, req)),
+        uploadedImages.map((img) => uploadDataUrlToStorage(img.dataUrl, userId, req)),
       )
     ).filter((url): url is string => !!url);
 
     // Only keep https/public URLs for classification and photo tours.
-    const publicImageUrls = [
+    const publicImageUrls = filterListingImageUrls([
       ...allImageUrls.filter((u) => u.startsWith("https://")),
       ...uploadedPublicUrls,
-    ];
+    ]);
 
     const shareToken = generateShareToken();
     const platform = detectPlatform(listingUrl);
@@ -156,10 +162,18 @@ router.post("/generate-tour", async (req, res) => {
 
     void saveTourSourceImages(tourId, publicImageUrls, memTour);
 
+    if (dbTourCreated && publicImageUrls.length > 0) {
+      void persistTourSourceImagesToDb(tourId, publicImageUrls, {
+        generationStatus: "queued",
+        currentStage: "Preparing images…",
+        status: "processing",
+      });
+    }
+
     // Store uploaded photos as tour_photos rows (thumbnail only)
     if (dbTourCreated && uploadedImages.length > 0) {
       try {
-        const photoRows = uploadedImages.slice(0, 20).map((img, i) => ({
+        const photoRows = uploadedImages.map((img, i) => ({
           tourId,
           roomLabel: `Uploaded Photo ${i + 1}`,
           floorNumber: 1,
@@ -215,17 +229,23 @@ router.post("/generate-tour", async (req, res) => {
 
 // GET /generate-tour/:tourId/status — richer status for generation flow
 router.get("/generate-tour/:tourId/status", async (req, res) => {
-  const userId =
-    (req.user as { profileId?: string; id?: string } | undefined)?.profileId ??
-    (req.user as { id?: string } | undefined)?.id ??
-    (req.headers["x-user-id"] as string | undefined);
-  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+  const userId = await requireProfileId(req);
+  if (!userId) {
+    return res.status(401).json({
+      error: "Unauthorized",
+      message: "Sign in required.",
+    });
+  }
 
   try {
     await advanceTourGeneration(req.params.tourId, userId, req.log);
   } catch (err) {
     req.log.warn({ err, tourId: req.params.tourId }, "Status-driven generation tick failed");
   }
+
+  const hydratedMem =
+    (await hydrateMemTourFromDb(req.params.tourId, userId)) ??
+    getMemTour(req.params.tourId);
 
   const stageLabels: Record<string, string> = {
     queued: "Queued for generation…",
@@ -256,7 +276,7 @@ router.get("/generate-tour/:tourId/status", async (req, res) => {
   // Memory always wins for `scenes` (DB doesn't track them yet). For
   // everything else we prefer memory when available since the pipeline runs
   // there; falling back to DB only when memory is empty.
-  const mem = getMemTour(req.params.tourId);
+  const mem = hydratedMem ?? getMemTour(req.params.tourId);
 
   if (tour && (!mem || tour.userId === userId)) {
     if (tour.userId !== userId) {
@@ -330,11 +350,13 @@ function serializeScene(s: MemScene) {
 
 // POST /generate-tour/:tourId/resume — re-run pipeline for incomplete tours
 router.post("/generate-tour/:tourId/resume", async (req, res) => {
-  const userId =
-    (req.user as { profileId?: string; id?: string } | undefined)?.profileId ??
-    (req.user as { id?: string } | undefined)?.id ??
-    (req.headers["x-user-id"] as string | undefined);
-  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+  const userId = await requireProfileId(req);
+  if (!userId) {
+    return res.status(401).json({
+      error: "Unauthorized",
+      message: "Sign in required.",
+    });
+  }
 
   let mem = getMemTour(req.params.tourId);
   if (!mem) {

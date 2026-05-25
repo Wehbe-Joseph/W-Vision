@@ -19,6 +19,11 @@ export function resolvePublicApiBaseUrl(): string {
     return configured;
   }
 
+  const vercelProd = (process.env.VERCEL_PROJECT_PRODUCTION_URL ?? "").trim();
+  if (process.env.VERCEL === "1" && vercelProd) {
+    return `https://${vercelProd.replace(/\/+$/, "")}`;
+  }
+
   const vercelHost = (process.env.VERCEL_URL ?? "").trim();
   if (process.env.VERCEL === "1" && vercelHost) {
     return `https://${vercelHost.replace(/\/+$/, "")}`;

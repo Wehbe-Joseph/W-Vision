@@ -1,6 +1,8 @@
 # Production deployment (Vercel — frontend + API)
 
-One Vercel project serves **both** the React app and the Express API (`/api/*` serverless function).
+One Vercel project serves **both** the React app and the Express API (`/api/*` serverless function). **No local API is required in production** — the browser calls same-origin `/api/...` on your Vercel domain.
+
+Copy env vars from `artifacts/tourvision/.env.vercel.example` into the Vercel dashboard.
 
 ---
 
@@ -43,9 +45,10 @@ In [Vercel](https://vercel.com) → your project → **Settings** → **Environm
 | `SUPABASE_SERVICE_ROLE_KEY` | Yes |
 | `APIFY_TOKEN` | Yes (for listing scrape) |
 | `GEMINI_API_KEY` | Yes (for room classification) |
-| `PUBLIC_API_BASE_URL` | Yes — set to `https://w-vision-tourvision-iauj.vercel.app` (no trailing slash) |
+| `PUBLIC_API_BASE_URL` | Optional — auto-set from `VERCEL_PROJECT_PRODUCTION_URL` when unset |
+| `TOURVISION_PUBLIC_URL` | Optional — same as your Vercel URL (panorama links in emails) |
 
-`VITE_API_BASE_URL` is **not** required when API runs on the same Vercel domain (default).
+`VITE_API_BASE_URL` must be **empty or unset** when API runs on the same Vercel domain. **Never** set it to `localhost` or Railway in production.
 
 Apply variables to **Production**, **Preview**, and **Development**, then **Redeploy**.
 

@@ -6,7 +6,9 @@ import {
   listKeyValueStoreKeys,
 } from "./apify";
 import { uploadTourImage } from "../../lib/imageStorage";
+import { normalizeToJpeg } from "../../lib/imageNormalize";
 import { logger } from "../../lib/logger";
+import { filterListingImageUrls, isJunkListingImageUrl } from "../../lib/listingImageFilter";
 import {
   type ListingData,
   type ListingImage,
@@ -132,21 +134,18 @@ async function tryDirectScrape(
 
   // Filter out small icons / branding assets — listing photos are always
   // served from /im/pictures/ and tend to use the longer, hashed paths.
-  const images: ListingImage[] = Array.from(matches)
-    .filter(
+  const urls = filterListingImageUrls(
+    Array.from(matches).filter(
       (u) =>
         u.includes("/im/pictures/") &&
         !/\b(?:logo|emblem|icon|avatar|host_thumbnail)\b/i.test(u),
-    )
-    // De-dupe near-identical sizes by normalizing the trailing image variant
-    .reduce<ListingImage[]>((acc, u) => {
-      const canonical = u.replace(/\?.*$/, "");
-      if (!acc.find((x) => x.url === canonical)) {
-        acc.push({ url: canonical, caption: null, room: null });
-      }
-      return acc;
-    }, [])
-    .slice(0, 60);
+    ),
+  );
+  const images: ListingImage[] = urls.map((url) => ({
+    url,
+    caption: null,
+    room: null,
+  }));
 
   return {
     platform: "airbnb",
@@ -267,7 +266,7 @@ async function tryApifyScrape(
         proxyConfiguration: { useApifyProxy: true },
       },
       timeoutSecs: 180,
-      maxItems: 50,
+      maxItems: 500,
     });
 
   // First try to parse image URLs from the dataset items (most scrapers).
@@ -422,8 +421,7 @@ async function tryUnzipKeyValueStore(
     entries = zip
       .getEntries()
       .filter((e) => !e.isDirectory && IMAGE_EXT_RE.test(e.entryName))
-      .map((e) => ({ name: e.entryName, data: e.getData() }))
-      .slice(0, 60);
+      .map((e) => ({ name: e.entryName, data: e.getData() }));
   } catch (err) {
     logger.warn({ err }, "Failed to read zip archive");
     return null;
@@ -460,9 +458,8 @@ async function uploadInBatches(
     const slice = entries.slice(i, i + batchSize);
     const settled = await Promise.allSettled(
       slice.map(async (entry) => {
-        const ext = entry.name.split(".").pop()?.toLowerCase() ?? "jpg";
-        const mime = EXT_TO_MIME[ext] ?? "image/jpeg";
-        const { publicUrl } = await uploadTourImage(entry.data, mime, ownerId);
+        const jpeg = await normalizeToJpeg(entry.data);
+        const { publicUrl } = await uploadTourImage(jpeg, "image/jpeg", ownerId);
         return { url: publicUrl, caption: null, room: null };
       }),
     );
@@ -497,14 +494,18 @@ function extractImagesFromActor(item: RawAirbnbItem): ListingImage[] {
   }
 
   const seen = new Set<string>();
-  return out
-    .filter((img) => !!img.url)
+  const deduped = out
+    .filter((img) => !!img.url && !isJunkListingImageUrl(img.url))
     .filter((img) => {
-      if (seen.has(img.url)) return false;
-      seen.add(img.url);
+      const canonical = img.url.replace(/\?.*$/, "");
+      if (seen.has(canonical)) return false;
+      seen.add(canonical);
+      img.url = canonical;
       return true;
-    })
-    .slice(0, 60);
+    });
+  const urls = filterListingImageUrls(deduped.map((i) => i.url));
+  const byUrl = new Map(deduped.map((i) => [i.url.replace(/\?.*$/, ""), i]));
+  return urls.map((url) => byUrl.get(url) ?? { url, caption: null, room: null });
 }
 
 function toListingImage(p: RawPhoto): ListingImage {

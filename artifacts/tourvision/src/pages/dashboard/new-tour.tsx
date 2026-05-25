@@ -20,6 +20,8 @@ import {
   filesToPendingPhotos, PendingPhoto,
 } from "@/hooks/use-pending-tour";
 import { getApiUrl } from "@/lib/runtime-api";
+import { getTourPageUrl } from "@/lib/tour-url";
+import { filterListingImageUrls } from "@/lib/listing-image-filter";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -99,7 +101,7 @@ export default function NewTour() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const fileRef = useRef<HTMLInputElement>(null);
-  const { getAccessToken } = useAuth();
+  const { isAuthenticated, getAccessToken } = useAuth();
   const generateMutation = useGenerateTour({
     mutation: {
       mutationFn: async (vars: { data: { listingUrl: string; imageUrls?: string[] } }) => {
@@ -181,7 +183,7 @@ export default function NewTour() {
           const label = img.room || img.caption;
           if (label) labels[img.url] = label;
         }
-        setApifyImageUrls(urls.slice(0, 20));
+        setApifyImageUrls(filterListingImageUrls(urls));
         setApifyImageLabels(labels);
       } catch {
         // Network blip — silently ignore; user can still upload photos.
@@ -202,7 +204,7 @@ export default function NewTour() {
     setPhotos((prev) => {
       const existing = new Set(prev.map((p) => p.name));
       const fresh = converted.filter((c) => !existing.has(c.name));
-      return [...prev, ...fresh].slice(0, 20);
+      return [...prev, ...fresh];
     });
   }, []);
 
@@ -228,6 +230,30 @@ export default function NewTour() {
 
   const handleGenerate = async () => {
     if (!url.trim() && !photos.length) return;
+
+    if (!isAuthenticated) {
+      toast({
+        title: "Please sign in",
+        description: "Sign in to generate a tour.",
+        variant: "destructive",
+      });
+      setLocation("/login");
+      return;
+    }
+
+    const token = await getAccessToken();
+    if (!token) {
+      toast({
+        title: "Please sign in",
+        description: "Your session expired — sign in again to continue.",
+        variant: "destructive",
+      });
+      setLocation("/login");
+      return;
+    }
+
+    const authHeaders = { Authorization: `Bearer ${token}` };
+
     try {
       let uploadedUrls: string[] = [];
 
@@ -239,25 +265,10 @@ export default function NewTour() {
           formData.append("images", blob, photo.name);
         }
 
-        // /api/images/upload is auth-gated; without the Supabase bearer
-        // token the backend returns 401, which manifested to the user as
-        // a generic "check your connection" toast.
-        const token = await getAccessToken();
-        if (!token) {
-          setIsUploading(false);
-          toast({
-            title: "Please sign in",
-            description: "Your session expired — sign in again to upload photos.",
-            variant: "destructive",
-          });
-          setLocation("/login");
-          return;
-        }
-
         const uploadRes = await fetch(getApiUrl("/api/images/upload"), {
           method: "POST",
           credentials: "include",
-          headers: { Authorization: `Bearer ${token}` },
+          headers: authHeaders,
           body: formData,
         });
         setIsUploading(false);
@@ -302,14 +313,15 @@ export default function NewTour() {
       ];
       setProcessingImages(galleryImages.slice(0, 12));
 
-      const res = await generateMutation.mutateAsync({
-        data: {
+      const res = await generateTour(
+        {
           listingUrl: url.trim() || "manual-upload",
           imageUrls: allImageUrls.filter(
             (u): u is string => typeof u === "string" && u.length > 0,
           ),
         },
-      });
+        { headers: authHeaders },
+      );
       setResult({
         tourId: res.tourId,
         shareToken: res.shareToken,
@@ -330,16 +342,17 @@ export default function NewTour() {
       let description =
         "Something went wrong. Check your connection and try again.";
       if (err instanceof ApiError) {
-        description = err.message;
         const payload = err.data as {
           error?: string;
           code?: string;
           message?: string;
         } | null;
-        if (typeof payload?.error === "string" && payload.error.trim()) {
-          description = payload.error;
-        } else if (typeof payload?.message === "string" && payload.message.trim()) {
+        if (typeof payload?.message === "string" && payload.message.trim()) {
           description = payload.message;
+        } else if (typeof payload?.error === "string" && payload.error.trim()) {
+          description = payload.error;
+        } else {
+          description = err.message;
         }
       } else if (err instanceof Error) {
         description = err.message;
@@ -446,7 +459,7 @@ export default function NewTour() {
   const canSubmit = urlPasted || hasPhotos;
   const totalImages = apifyImageUrls.length + photos.length;
 
-  const shareUrl = result ? `${window.location.origin}/tour/${result.shareToken}` : "";
+  const shareUrl = result?.shareToken ? getTourPageUrl(result.shareToken) : "";
 
   // Highlight one image at a time in the scanning gallery (rotates every 2s).
   const [scanIndex, setScanIndex] = useState(0);
@@ -585,7 +598,7 @@ export default function NewTour() {
                         <ImagePlus className="w-5 h-5" />
                       </div>
                       <p className="text-sm font-medium">Drag & drop or click to add photos</p>
-                      <p className="text-xs text-muted-foreground">JPG, PNG, WEBP — up to 20 photos</p>
+                      <p className="text-xs text-muted-foreground">JPG, PNG, WEBP — all listing photos supported</p>
                     </div>
                   )}
                 </div>
@@ -1004,10 +1017,21 @@ export default function NewTour() {
                 </Button>
 
                 <Button
+                  asChild
                   className="w-full justify-between bg-primary text-primary-foreground font-bold"
-                  onClick={() => window.open(`/tour/${result.shareToken}`, "_blank")}
+                  disabled={!result.shareToken}
                 >
-                  Open 3D Tour <ExternalLink className="w-4 h-4" />
+                  <a
+                    href={
+                      result.shareToken
+                        ? getTourPageUrl(result.shareToken)
+                        : undefined
+                    }
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Open 3D Tour <ExternalLink className="w-4 h-4" />
+                  </a>
                 </Button>
 
                 <Button

@@ -17,6 +17,7 @@ import {
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
+import { getTourPageUrl } from "@/lib/tour-url";
 import { motion } from "framer-motion";
 
 export default function MyTours() {
@@ -180,17 +181,25 @@ export default function MyTours() {
 
               {/* Actions */}
               <div className="border-t border-zinc-200 p-3 flex gap-2">
-                <button
-                  disabled={tour.status !== "ready" || tour.frozen}
-                  onClick={() => window.open(`/tour/${tour.shareToken}`, "_blank")}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold uppercase tracking-wide rounded-lg border border-zinc-300 hover:bg-zinc-900 hover:text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                <a
+                  href={tour.shareToken ? getTourPageUrl(tour.shareToken) : undefined}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-disabled={tour.status !== "ready" || tour.frozen}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold uppercase tracking-wide rounded-lg border border-zinc-300 hover:bg-zinc-900 hover:text-white transition-all ${
+                    tour.status !== "ready" || tour.frozen
+                      ? "opacity-30 pointer-events-none cursor-not-allowed"
+                      : ""
+                  }`}
                 >
                   <ExternalLink className="w-3.5 h-3.5" /> View
-                </button>
+                </a>
                 <button
                   disabled={tour.status !== "ready" || tour.frozen}
                   onClick={async () => {
-                    const shareUrl = `${window.location.origin}/tour/${tour.shareToken}`;
+                    const shareUrl = tour.shareToken
+                      ? getTourPageUrl(tour.shareToken)
+                      : "";
                     await navigator.clipboard.writeText(shareUrl);
                     toast({ title: "Tour link copied" });
                   }}

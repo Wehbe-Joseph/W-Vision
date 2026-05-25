@@ -1,5 +1,6 @@
 import { type ImageClassification } from "./gemini";
 import { roomNavRank } from "../../lib/roomOrder";
+import { isPanoramaEligibleRoomType } from "../../lib/listingImageFilter";
 
 /**
  * One room in the tour. Each group keeps the single best photo for display.
@@ -54,6 +55,7 @@ export function groupClassificationsIntoScenes(
 
   const groups: SceneGroup[] = [];
   for (const [roomType, items] of buckets) {
+    if (!isPanoramaEligibleRoomType(roomType)) continue;
     const best = selectBestPhotoForRoom(items);
     if (!best) continue;
 

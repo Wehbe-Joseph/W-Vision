@@ -2,6 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 import { uploadTourImage } from "../lib/imageStorage";
 import { getImage } from "../lib/imageStore";
+import { requireProfileId } from "../lib/resolveProfileId";
 
 const router = Router();
 
@@ -20,11 +21,13 @@ const upload = multer({
 // POST /images/upload — multipart, pushes to Supabase Storage and returns
 // public URLs that external services can fetch from anywhere.
 router.post("/images/upload", upload.array("images", 20), async (req, res) => {
-  const userId =
-    (req.user as { profileId?: string; id?: string } | undefined)?.profileId ??
-    (req.user as { id?: string } | undefined)?.id ??
-    (req.headers["x-user-id"] as string | undefined);
-  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+  const userId = await requireProfileId(req);
+  if (!userId) {
+    return res.status(401).json({
+      error: "Unauthorized",
+      message: "Sign in required to upload photos.",
+    });
+  }
 
   const files = req.files as Express.Multer.File[] | undefined;
   if (!files || files.length === 0) {

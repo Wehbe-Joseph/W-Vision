@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "installCommand": "cd ../.. && pnpm install",
-  "buildCommand": "cd ../.. && pnpm --filter @workspace/api-server build && cp artifacts/api-server/dist/serverless.mjs artifacts/tourvision/api/serverless.mjs && pnpm --filter @workspace/tourvision build",
+  "buildCommand": "pnpm run vercel-build",
   "outputDirectory": "dist/public",
   "rewrites": [
     {

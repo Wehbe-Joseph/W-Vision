@@ -1,4 +1,4 @@
-import { requireSupabaseAdmin, supabaseAdmin } from "./supabaseAdmin";
+import { getSupabaseAdmin, requireSupabaseAdmin } from "./supabaseAdmin";
 import { logger } from "./logger";
 
 /** Public bucket for Gaussian splat (.spz) files — same name as logical prefix in paths. */
@@ -9,13 +9,14 @@ export const SPZ_STORAGE_BUCKET = "tours";
  * SPZ mirroring requires the same credentials as other admin storage ops.
  */
 export function isSplatStorageConfigured(): boolean {
-  return supabaseAdmin !== null;
+  return getSupabaseAdmin() !== null;
 }
 
 /**
  * Ensure the public `tours` bucket exists for .spz objects. Idempotent.
  */
 export async function ensureToursSpzBucket(): Promise<void> {
+  const supabaseAdmin = getSupabaseAdmin();
   if (!supabaseAdmin) {
     logger.warn(
       "Skipping ensureToursSpzBucket — supabaseAdmin not configured (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY).",

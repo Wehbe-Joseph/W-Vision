@@ -1,5 +1,5 @@
 import { randomBytes } from "crypto";
-import { requireSupabaseAdmin, supabaseAdmin } from "./supabaseAdmin";
+import { getSupabaseAdmin, requireSupabaseAdmin } from "./supabaseAdmin";
 import { storeImage, getPublicBaseUrl } from "./imageStore";
 import { resolvePublicApiBaseUrl } from "./resolvePublicApiBaseUrl";
 import { logger } from "./logger";
@@ -22,7 +22,7 @@ function extFromMime(mimeType: string): string {
 
 /** True when Supabase Storage is configured and reachable. */
 function storageAvailable(): boolean {
-  return supabaseAdmin !== null;
+  return getSupabaseAdmin() !== null;
 }
 
 /**
@@ -30,6 +30,7 @@ function storageAvailable(): boolean {
  * Errors are only warned so the server keeps booting.
  */
 export async function ensureTourImagesBucket(): Promise<void> {
+  const supabaseAdmin = getSupabaseAdmin();
   if (!supabaseAdmin) {
     logger.warn(
       "Skipping ensureTourImagesBucket — supabaseAdmin not configured.",

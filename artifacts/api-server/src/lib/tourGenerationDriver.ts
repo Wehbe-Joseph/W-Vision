@@ -7,7 +7,10 @@ import {
   type MemTour,
   type MemGenerationStatus,
 } from "./tourMemoryStore";
-import { persistedScenesToMemScenes } from "./tourScenesPersistence";
+import {
+  persistedScenesToMemScenes,
+  sourceImageUrlsFromGenerationScenes,
+} from "./tourScenesPersistence";
 import { logger } from "./logger";
 import { runFullTourPipeline } from "./tourPipeline";
 import { runPanoramaGeneration } from "./panoramaPipeline";
@@ -67,7 +70,11 @@ export async function hydrateMemTourFromDb(
   if (!tour || tour.userId !== userId) return undefined;
 
   const scenes = persistedScenesToMemScenes(tour.generationScenes);
-  const sourceImageUrls = sourceUrlsFromScenes(scenes);
+  const persistedSources = sourceImageUrlsFromGenerationScenes(
+    tour.generationScenes,
+  );
+  const sourceImageUrls =
+    persistedSources.length > 0 ? persistedSources : sourceUrlsFromScenes(scenes);
   const gs = tour.generationStatus;
   const generationStatus: MemGenerationStatus =
     gs === "queued" || gs === "processing" || gs === "completed" || gs === "failed"

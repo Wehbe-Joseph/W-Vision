@@ -14,20 +14,13 @@ const pendingPersist = new Set<string>();
 let dbCircuitOpenUntil = 0;
 const DB_CIRCUIT_COOLDOWN_MS = 60_000;
 
-export function queuePersistTourScenes(tourId: string): void {
-  if (Date.now() < dbCircuitOpenUntil) return;
-  if (pendingPersist.has(tourId)) return;
-  pendingPersist.add(tourId);
-  setImmediate(() => {
-    pendingPersist.delete(tourId);
-    const tour = getMemTour(tourId);
-    if (tour && tour.scenes.length > 0) {
-      void persistTourGenerationScenesToDb(tour);
-    }
-  });
+/** Stored on `tours.generation_scenes` (Vercel-safe resume across serverless instances). */
+export interface GenerationScenesEnvelope {
+  sourceImageUrls: string[];
+  scenes: PersistedMemSceneJSON[];
 }
 
-/** JSON shape stored on `tours.generation_scenes` */
+/** JSON shape for one room scene */
 export interface PersistedMemSceneJSON {
   id: string;
   label: string;
@@ -40,6 +33,51 @@ export interface PersistedMemSceneJSON {
   generatedTourUrl: string | null;
   errorMessage: string | null;
   locked?: boolean;
+}
+
+export function parseGenerationScenesPayload(raw: unknown): GenerationScenesEnvelope {
+  if (Array.isArray(raw)) {
+    return { sourceImageUrls: [], scenes: raw.filter(isPersistedScene) };
+  }
+  if (raw && typeof raw === "object") {
+    const o = raw as Record<string, unknown>;
+    const sourceImageUrls = Array.isArray(o.sourceImageUrls)
+      ? o.sourceImageUrls.filter((u): u is string => typeof u === "string")
+      : [];
+    const scenesRaw = o.scenes;
+    const scenes = Array.isArray(scenesRaw)
+      ? scenesRaw.filter(isPersistedScene)
+      : [];
+    return { sourceImageUrls, scenes };
+  }
+  return { sourceImageUrls: [], scenes: [] };
+}
+
+export function sourceImageUrlsFromGenerationScenes(raw: unknown): string[] {
+  return parseGenerationScenesPayload(raw).sourceImageUrls;
+}
+
+function buildEnvelope(tour: MemTour): GenerationScenesEnvelope {
+  return {
+    sourceImageUrls: tour.sourceImageUrls ?? [],
+    scenes: serializeScenes(tour.scenes),
+  };
+}
+
+export function queuePersistTourScenes(tourId: string): void {
+  if (Date.now() < dbCircuitOpenUntil) return;
+  if (pendingPersist.has(tourId)) return;
+  pendingPersist.add(tourId);
+  setImmediate(() => {
+    pendingPersist.delete(tourId);
+    const tour = getMemTour(tourId);
+    if (
+      tour &&
+      (tour.scenes.length > 0 || (tour.sourceImageUrls?.length ?? 0) > 0)
+    ) {
+      void persistTourGenerationScenesToDb(tour);
+    }
+  });
 }
 
 function serializeScenes(scenes: MemScene[]): PersistedMemSceneJSON[] {
@@ -58,9 +96,38 @@ function serializeScenes(scenes: MemScene[]): PersistedMemSceneJSON[] {
   }));
 }
 
+/** Save listing photo URLs immediately so Vercel status polls can resume on a cold instance. */
+export async function persistTourSourceImagesToDb(
+  tourId: string,
+  sourceImageUrls: string[],
+  extra?: Partial<{
+    generationStatus: string;
+    currentStage: string;
+    status: string;
+  }>,
+): Promise<void> {
+  try {
+    const envelope: GenerationScenesEnvelope = {
+      sourceImageUrls,
+      scenes: [],
+    };
+    await db
+      .update(toursTable)
+      .set({
+        generationScenes: envelope,
+        generationStatus: extra?.generationStatus,
+        currentStage: extra?.currentStage,
+        status: extra?.status,
+      })
+      .where(eq(toursTable.id, tourId));
+  } catch (err) {
+    logger.warn({ err, tourId }, "persistTourSourceImagesToDb failed");
+  }
+}
+
 async function persistTourGenerationScenesToDb(tour: MemTour): Promise<void> {
   try {
-    const payload = serializeScenes(tour.scenes);
+    const payload = buildEnvelope(tour);
     await db
       .update(toursTable)
       .set({
@@ -68,11 +135,19 @@ async function persistTourGenerationScenesToDb(tour: MemTour): Promise<void> {
         generationStatus: tour.generationStatus,
         generatedTourUrl: tour.generatedTourUrl,
         previewImageUrl: tour.previewImageUrl ?? undefined,
+        currentStage: tour.currentStage,
+        roomsDetected: tour.roomsDetected,
+        roomsReady: tour.roomsReady,
+        panoramaStatus: tour.panoramaStatus,
+        status:
+          tour.generationStatus === "completed"
+            ? "ready"
+            : tour.generationStatus === "failed"
+              ? "failed"
+              : "processing",
       })
       .where(eq(toursTable.id, tour.tourId));
   } catch (err) {
-    // Open the circuit on connection errors so polling doesn't keep spamming
-    // logs; the in-memory mirror is the source of truth for these tours.
     const msg = err instanceof Error ? err.message : String(err);
     if (/ENOTFOUND|ECONNREFUSED|tenant\/user|terminating connection/i.test(msg)) {
       dbCircuitOpenUntil = Date.now() + DB_CIRCUIT_COOLDOWN_MS;
@@ -100,12 +175,9 @@ export function isPersistedScene(x: unknown): x is PersistedMemSceneJSON {
   );
 }
 
-/** Full `MemScene` rows from `tours.generation_scenes` JSON (for resume after restart). */
-export function persistedScenesToMemScenes(raw: unknown): MemScene[] {
-  if (!Array.isArray(raw)) return [];
+function scenesArrayToMem(scenes: PersistedMemSceneJSON[]): MemScene[] {
   const result: MemScene[] = [];
-  for (const row of raw) {
-    if (!isPersistedScene(row)) continue;
+  for (const row of scenes) {
     const gs = row.generationStatus;
     let generationStatus: MemScene["generationStatus"] = "queued";
     if (
@@ -119,19 +191,18 @@ export function persistedScenesToMemScenes(raw: unknown): MemScene[] {
     const imageUrls = Array.isArray(row.imageUrls)
       ? row.imageUrls.filter((u): u is string => typeof u === "string")
       : [];
-    const operationId =
-      row.operationId === null || row.operationId === undefined
-        ? null
-        : typeof row.operationId === "string"
-          ? row.operationId
-          : null;
     result.push({
       id: row.id,
       label: row.label,
       roomType: row.roomType,
       thumbnailUrl: row.thumbnailUrl,
       imageUrls,
-      operationId,
+      operationId:
+        row.operationId === null || row.operationId === undefined
+          ? null
+          : typeof row.operationId === "string"
+            ? row.operationId
+            : null,
       worldId: typeof row.worldId === "string" ? row.worldId : null,
       generationStatus,
       generatedTourUrl:
@@ -142,6 +213,11 @@ export function persistedScenesToMemScenes(raw: unknown): MemScene[] {
     });
   }
   return result;
+}
+
+/** Full `MemScene` rows from `tours.generation_scenes` JSON (for resume after restart). */
+export function persistedScenesToMemScenes(raw: unknown): MemScene[] {
+  return scenesArrayToMem(parseGenerationScenesPayload(raw).scenes);
 }
 
 /** Rehydrate scenes for public API when memory mirror is gone (server restart). */
@@ -157,10 +233,9 @@ export function mapDbScenesToPublicLike(raw: unknown): {
   errorMessage: string | null;
   locked: boolean;
 }[] {
-  if (!Array.isArray(raw)) return [];
+  const scenes = parseGenerationScenesPayload(raw).scenes;
   const out: ReturnType<typeof mapDbScenesToPublicLike> = [];
-  for (const row of raw) {
-    if (!isPersistedScene(row)) continue;
+  for (const row of scenes) {
     const gs = row.generationStatus;
     let generationStatus: MemScene["generationStatus"] = "queued";
     if (

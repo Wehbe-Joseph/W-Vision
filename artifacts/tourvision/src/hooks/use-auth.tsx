@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -71,9 +72,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const getAccessToken = useCallback(async () => {
     if (!supabase) return null;
-    const { data } = await supabase.auth.getSession();
-    return data.session?.access_token ?? null;
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (sessionData.session?.access_token) {
+      return sessionData.session.access_token;
+    }
+    const { data: refreshed } = await supabase.auth.refreshSession();
+    return refreshed.session?.access_token ?? null;
   }, []);
+
+  // Register before child effects so dashboard queries include Bearer token.
+  useLayoutEffect(() => {
+    if (supabaseEnvError || !supabase) {
+      setAuthTokenGetter(null);
+      return;
+    }
+    setAuthTokenGetter(() => getAccessToken());
+  }, [getAccessToken]);
 
   useEffect(() => {
     if (supabaseEnvError || !supabase) {
@@ -82,8 +96,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAuthTokenGetter(null);
       return;
     }
-
-    setAuthTokenGetter(() => getAccessToken());
 
     let mounted = true;
 

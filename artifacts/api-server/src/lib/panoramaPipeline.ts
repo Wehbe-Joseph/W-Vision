@@ -3,7 +3,7 @@ import { toursTable, tourPhotosTable } from "@workspace/db";
 import { and, eq, or } from "drizzle-orm";
 import type { SceneGroup } from "../services/imageClassifier/grouping";
 import { selectBestPhotoForRoom } from "../services/imageClassifier/grouping";
-import { generatePanorama } from "./panorama";
+import { generatePanorama, isAiPanoramaEnabled } from "./panorama";
 import {
   getMemTour,
   updateMemScene,
@@ -20,12 +20,14 @@ async function setPhotoPanorama(
   roomType: string,
   panoramaUrl: string | null,
   status: "ready" | "failed" | "pending",
+  isAiGenerated: boolean,
 ): Promise<void> {
   await db
     .update(tourPhotosTable)
     .set({
       panoramaUrl: panoramaUrl ?? undefined,
       panoramaStatus: status,
+      isAiGenerated,
     })
     .where(
       and(
@@ -80,7 +82,12 @@ export async function runPanoramaGeneration(
   for (let i = 0; i < roomsToGenerate.length; i++) {
     const g = roomsToGenerate[i]!;
     const roomType = g.roomType;
-    const imageUrl = g.worldImageUrl;
+    const referenceUrls = [
+      g.worldImageUrl,
+      ...g.classifications
+        .map((c) => c.imageUrl)
+        .filter((u) => u && u !== g.worldImageUrl),
+    ].filter((u): u is string => typeof u === "string" && u.startsWith("http"));
     const n = i + 1;
 
     const stageMsg = `Generating ${roomType}... (${n} of ${totalRooms})`;
@@ -97,12 +104,34 @@ export async function runPanoramaGeneration(
       /* ignore */
     }
 
-    const panoramaUrl = await generatePanorama(imageUrl, roomType, tourId);
+    let panoramaUrl: string | null;
+    if (isAiPanoramaEnabled()) {
+      panoramaUrl = await generatePanorama(referenceUrls, roomType, tourId);
+      if (!panoramaUrl) {
+        reqLog.warn(
+          { tourId, roomType, refs: referenceUrls.length },
+          "AI panorama failed for room",
+        );
+      }
+    } else {
+      // Use the actual listing photo the user uploaded/scraped — no AI re-imagining.
+      panoramaUrl = g.worldImageUrl;
+      reqLog.info(
+        { tourId, roomType, source: g.worldImageUrl.slice(0, 80) },
+        "Using listing photo only (DISABLE_AI_PANORAMA=true)",
+      );
+    }
 
     if (panoramaUrl) {
       roomsReady += 1;
       try {
-        await setPhotoPanorama(tourId, roomType, panoramaUrl, "ready");
+        await setPhotoPanorama(
+          tourId,
+          roomType,
+          panoramaUrl,
+          "ready",
+          isAiPanoramaEnabled(),
+        );
       } catch (err) {
         reqLog.warn({ err, tourId, roomType }, "Failed to save panorama_url");
       }
@@ -119,7 +148,7 @@ export async function runPanoramaGeneration(
       }
     } else {
       try {
-        await setPhotoPanorama(tourId, roomType, null, "failed");
+        await setPhotoPanorama(tourId, roomType, null, "failed", false);
       } catch {
         /* ignore */
       }

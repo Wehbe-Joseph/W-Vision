@@ -1,4 +1,8 @@
 import { logger } from "../../lib/logger";
+import {
+  isJunkListingImageUrl,
+  isPanoramaEligibleRoomType,
+} from "../../lib/listingImageFilter";
 
 /**
  * Google Gemini image classifier (gemini-2.5-flash-lite) for real-estate photos.
@@ -87,9 +91,11 @@ No code blocks. Pure JSON only.
   "recommended_for_3d": boolean
 }
 
-is_property_photo = false for logos, watermarks, floor plans, 
-screenshots of the listing UI, maps, or non-property images.
-true for actual interior/exterior photos of the home.
+is_property_photo = false for: logos, watermarks, floor plans, maps,
+screenshots of the Airbnb app/website, amenity icons (pool icon, wifi icon,
+bell, key, host avatar), 3D renders of generic houses, stock illustrations,
+marketing graphics, or any image that is NOT a real photograph of this listing.
+true ONLY for real photographs of rooms/spaces in the property.
 
 quality_score rules:
 10 = bright, sharp, wide angle, beautiful, no clutter
@@ -233,7 +239,14 @@ export async function classifyListingImages(
 export function filterClassificationsForTour(
   items: ImageClassification[],
 ): ImageClassification[] {
-  return items.filter((c) => c.isPropertyPhoto && c.qualityScore >= 4);
+  return items.filter((c) => {
+    if (isJunkListingImageUrl(c.imageUrl)) return false;
+    if (!c.isPropertyPhoto) return false;
+    if (c.qualityScore < 5) return false;
+    if (!c.isInterior) return false;
+    if (!isPanoramaEligibleRoomType(c.roomType)) return false;
+    return true;
+  });
 }
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
@@ -272,8 +285,9 @@ function parseClassification(
     const roomType = normalizeRoomType(raw.room_type);
     const qualityScore = clampNum(raw.quality_score, 1, 10, 5);
     const wowFactor = clampNum(raw.wow_factor, 1, 10, 5);
-    const isPropertyPhoto =
+    let isPropertyPhoto =
       typeof raw.is_property_photo === "boolean" ? raw.is_property_photo : true;
+    if (isJunkListingImageUrl(imageUrl)) isPropertyPhoto = false;
     return {
       imageUrl,
       roomType,
@@ -319,11 +333,11 @@ function synthesizeFallback(
   return {
     imageUrl,
     roomType: "Other",
-    qualityScore: 5,
-    wowFactor: 5,
-    combinedScore: 5,
-    isPropertyPhoto: true,
-    isInterior: true,
+    qualityScore: 1,
+    wowFactor: 1,
+    combinedScore: 1,
+    isPropertyPhoto: false,
+    isInterior: false,
     isWideAngle: false,
     recommendedFor3d: false,
     fallback: true,

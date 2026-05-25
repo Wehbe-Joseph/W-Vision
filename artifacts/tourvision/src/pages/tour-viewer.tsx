@@ -1,20 +1,32 @@
 import { useMemo, useState } from "react";
 import { useLocation, useParams } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
-import { Loader2, Share2, X } from "lucide-react";
+import { Loader2, PanelLeftOpen, Share2, X } from "lucide-react";
 import { ApiError, useGetPublicTour } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 import WVisionLogo from "@/components/WVisionLogo";
 import PannellumViewer from "@/components/tour/PannellumViewer";
+import TourRoomSidebar from "@/components/tour/TourRoomSidebar";
+import AddRoomDialog from "@/components/tour/AddRoomDialog";
+import type { PendingPhoto } from "@/hooks/use-pending-tour";
 import { getApiUrl } from "@/lib/runtime-api";
+import {
+  hasAiPanorama,
+  panoramaUrlForViewer,
+  pickPanoramaRoomsForViewer,
+} from "@/lib/panorama-rooms";
 
 interface TourPhotoPanorama {
   roomLabel?: string | null;
   roomType?: string | null;
   panoramaUrl?: string | null;
+  thumbnailUrl?: string | null;
   panoramaStatus?: string | null;
   floorNumber?: number | null;
+  isAiGenerated?: boolean;
 }
 
 interface ScenePanorama {
@@ -42,6 +54,8 @@ export default function TourViewer() {
   const params = useParams();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { isAuthenticated, getAccessToken } = useAuth();
+  const queryClient = useQueryClient();
   const shareToken = params.shareToken || "";
 
   const { data, isLoading, error } = useGetPublicTour(shareToken, {
@@ -53,39 +67,11 @@ export default function TourViewer() {
   });
   const tour = (data ?? null) as PublicTourLike | null;
 
-  const panoramaRooms = useMemo(() => {
-    const fromPhotos = (tour?.rooms ?? [])
-      .filter(
-        (p) =>
-          p.panoramaStatus === "ready" &&
-          typeof p.panoramaUrl === "string" &&
-          p.panoramaUrl.length > 0,
-      )
-      .sort((a, b) => (a.floorNumber ?? 1) - (b.floorNumber ?? 1))
-      .map((p) => ({
-        roomType: p.roomType ?? p.roomLabel ?? "Room",
-        panoramaUrl: p.panoramaUrl!,
-        floorNumber: p.floorNumber ?? 1,
-      }));
-
-    if (fromPhotos.length > 0) return fromPhotos;
-
-    return (tour?.scenes ?? [])
-      .filter(
-        (s) =>
-          s.generationStatus === "completed" &&
-          typeof s.generatedTourUrl === "string" &&
-          s.generatedTourUrl.length > 0,
-      )
-      .map((s, i) => ({
-        roomType: s.roomType ?? s.label ?? "Room",
-        panoramaUrl: s.generatedTourUrl!,
-        floorNumber: i + 1,
-      }));
-  }, [tour?.rooms, tour?.scenes]);
-
-  const isFreetier = false;
-
+  const [activeSceneId, setActiveSceneId] = useState<string>("");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [showAddRoom, setShowAddRoom] = useState(false);
+  const [addingRoom, setAddingRoom] = useState(false);
+  const [pendingRoomLabel, setPendingRoomLabel] = useState<string | null>(null);
   const [showLeadModal, setShowLeadModal] = useState(false);
   const [leadLoading, setLeadLoading] = useState(false);
   const [leadSuccess, setLeadSuccess] = useState(false);
@@ -95,6 +81,109 @@ export default function TourViewer() {
     phone: "",
     message: "",
   });
+
+  const panoramaRooms = useMemo(() => {
+    const fromPhotos = pickPanoramaRoomsForViewer(tour?.rooms ?? []);
+    if (fromPhotos.length > 0) {
+      return fromPhotos.map((r) => ({
+        ...r,
+        panoramaUrl: panoramaUrlForViewer(r),
+      }));
+    }
+
+    return (tour?.scenes ?? [])
+      .filter(
+        (s) =>
+          s.generationStatus === "completed" &&
+          typeof s.generatedTourUrl === "string" &&
+          s.generatedTourUrl.length > 0,
+      )
+      .map((s, i) => ({
+        sceneId: s.id ? `scene-${s.id}` : `scene-fallback-${i}`,
+        roomType: s.roomType ?? s.label ?? "Room",
+        panoramaUrl: s.generatedTourUrl!,
+        floorNumber: i + 1,
+        isAiGenerated: true,
+      }));
+  }, [tour?.rooms, tour?.scenes]);
+
+  const resolvedActiveSceneId =
+    activeSceneId && panoramaRooms.some((r) => r.sceneId === activeSceneId)
+      ? activeSceneId
+      : panoramaRooms[0]?.sceneId ?? "";
+
+  const canEditTour = isAuthenticated && !!tour?.id;
+
+  async function handleAddRoom(photos: PendingPhoto[]) {
+    if (!tour?.id) {
+      toast({ title: "Tour not loaded", variant: "destructive" });
+      return;
+    }
+    const token = await getAccessToken();
+    if (!token) {
+      toast({
+        title: "Sign in required",
+        description: "Log in to add rooms to your tour.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setAddingRoom(true);
+    setPendingRoomLabel("New room…");
+    try {
+      const res = await fetch(getApiUrl(`/api/tours/${tour.id}/rooms/add`), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          uploadedImages: photos.map((p) => ({
+            name: p.name,
+            dataUrl: p.dataUrl,
+          })),
+        }),
+      });
+
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        room?: {
+          sceneId?: string;
+          label?: string;
+          roomType?: string;
+        };
+      };
+
+      if (!res.ok) {
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
+
+      await queryClient.invalidateQueries({
+        queryKey: ["public-tour", shareToken],
+      });
+
+      if (body.room?.sceneId) setActiveSceneId(body.room.sceneId);
+
+      toast({
+        title: "Room added",
+        description: body.room?.label
+          ? `${body.room.label} is ready in 360°.`
+          : "Your new room panorama is ready.",
+      });
+    } catch (err) {
+      toast({
+        title: "Could not add room",
+        description: err instanceof Error ? err.message : "Try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setAddingRoom(false);
+      setPendingRoomLabel(null);
+    }
+  }
+
+  const isFreetier = false;
 
   async function handleShare() {
     try {
@@ -181,6 +270,7 @@ export default function TourViewer() {
     const frozen =
       apiErr?.status === 410 ||
       (typeof apiErr?.data === "object" && apiErr?.data?.code === "TOUR_FROZEN");
+    const loadFailed = apiErr != null;
     if (frozen) {
       return (
         <div className="fixed inset-0 bg-[#080808] flex items-center justify-center text-white">
@@ -204,11 +294,25 @@ export default function TourViewer() {
     }
     return (
       <div className="fixed inset-0 bg-[#080808] flex items-center justify-center text-white">
-        <div className="text-center">
+        <div className="text-center max-w-md px-6">
           <div className="text-3xl font-semibold tracking-tight mb-2">
             WVISION
           </div>
-          <p className="text-white/60">Tour not found.</p>
+          <p className="text-white/60">
+            {loadFailed
+              ? "Could not load this tour."
+              : "Tour not found."}
+          </p>
+          {loadFailed && (
+            <p className="text-white/40 mt-2 text-xs font-mono break-all">
+              {apiErr.message}
+              {apiErr.status ? ` (HTTP ${apiErr.status})` : ""}
+            </p>
+          )}
+          <p className="text-white/40 mt-3 text-xs">
+            Check that the site API is up:{" "}
+            <code className="text-white/60">{getApiUrl("/api/healthz")}</code>
+          </p>
           <Button
             className="mt-4 bg-white text-black hover:bg-white/90"
             onClick={() => setLocation("/")}
@@ -227,12 +331,77 @@ export default function TourViewer() {
     tour.status === "processing";
 
   const hasPanoramas = panoramaRooms.length > 0;
+  const has360Panoramas =
+    hasPanoramas && panoramaRooms.some((r) => hasAiPanorama(r));
 
   return (
     <div className="fixed inset-0 bg-[#080808] text-white overflow-hidden">
-      <div className="absolute inset-0 z-0 top-14">
-        {!generating && hasPanoramas ? (
-          <PannellumViewer rooms={panoramaRooms} isFreetier={isFreetier} />
+      <div className="absolute inset-0 z-0 top-14 flex">
+        {!generating && has360Panoramas ? (
+          <>
+            {sidebarOpen ? (
+              <TourRoomSidebar
+                rooms={[
+                  ...panoramaRooms.map((r) => ({
+                    sceneId: r.sceneId,
+                    roomType: r.roomType,
+                  })),
+                  ...(pendingRoomLabel
+                    ? [
+                        {
+                          sceneId: "__pending__",
+                          roomType: pendingRoomLabel,
+                          isGenerating: true,
+                        },
+                      ]
+                    : []),
+                ]}
+                activeSceneId={resolvedActiveSceneId || "__pending__"}
+                onSelectRoom={setActiveSceneId}
+                onAddRoom={canEditTour ? () => setShowAddRoom(true) : undefined}
+                addDisabled={addingRoom}
+                onClose={() => setSidebarOpen(false)}
+              />
+            ) : null}
+            <div className="flex-1 min-w-0 relative">
+              {!sidebarOpen ? (
+                <button
+                  type="button"
+                  onClick={() => setSidebarOpen(true)}
+                  aria-label="Open rooms sidebar"
+                  className="absolute left-3 top-3 z-20 h-9 px-3 rounded-lg border border-white/20 bg-black/60 backdrop-blur-sm text-white/90 text-xs font-medium hover:bg-black/80 inline-flex items-center gap-2"
+                >
+                  <PanelLeftOpen className="w-4 h-4" />
+                  Rooms
+                </button>
+              ) : null}
+              <PannellumViewer
+                rooms={panoramaRooms}
+                isFreetier={isFreetier}
+                activeSceneId={resolvedActiveSceneId}
+                onActiveSceneIdChange={setActiveSceneId}
+                hideBottomNav={sidebarOpen}
+              />
+            </div>
+            <AddRoomDialog
+              open={showAddRoom}
+              onOpenChange={setShowAddRoom}
+              loading={addingRoom}
+              onSubmit={handleAddRoom}
+            />
+          </>
+        ) : !generating && hasPanoramas ? (
+          <div className="w-full h-full flex items-center justify-center px-6 text-center">
+            <div className="max-w-md space-y-3">
+              <p className="text-white/90 font-medium">
+                360° panoramas are not ready for this tour yet.
+              </p>
+              <p className="text-white/50 text-sm">
+                Generate a new tour from your listing URL so we can classify all
+                photos and build room panoramas.
+              </p>
+            </div>
+          </div>
         ) : generating ? (
           <div className="w-full h-full flex items-center justify-center">
             <div className="flex flex-col items-center gap-3 rounded-xl bg-black/50 border border-white/10 px-6 py-5">

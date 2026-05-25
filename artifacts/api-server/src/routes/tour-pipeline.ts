@@ -27,17 +27,12 @@ import { saveClassifiedPhotosToDb } from "../lib/tourPhotoPersistence";
 import { runPanoramaGeneration } from "../lib/panoramaPipeline";
 import { notifyAgentTourReady } from "../lib/tourNotify";
 import { queuePersistTourScenes } from "../lib/tourScenesPersistence";
+import { requireProfileId } from "../lib/resolveProfileId";
+import { filterListingImageUrls } from "../lib/listingImageFilter";
 const router = Router();
 
-function userIdFromReq(req: {
-  user?: unknown;
-  headers: Record<string, unknown>;
-}): string | undefined {
-  return (
-    (req.user as { profileId?: string; id?: string } | undefined)?.profileId ??
-    (req.user as { id?: string } | undefined)?.id ??
-    (req.headers["x-user-id"] as string | undefined)
-  );
+async function userIdFromReq(req: Parameters<typeof requireProfileId>[0]) {
+  return requireProfileId(req);
 }
 
 function generateShareToken() {
@@ -116,8 +111,13 @@ function isUuid(v: unknown): v is string {
 
 // POST /tours/create
 router.post("/tours/create", async (req, res) => {
-  const userId = userIdFromReq(req);
-  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+  const userId = await userIdFromReq(req);
+  if (!userId) {
+    return res.status(401).json({
+      error: "Unauthorized",
+      message: "Sign in required.",
+    });
+  }
 
   const listingUrl =
     typeof req.body?.listingUrl === "string" ? req.body.listingUrl.trim() : "";
@@ -186,8 +186,13 @@ router.post("/tours/create", async (req, res) => {
 
 // POST /tours/extract
 router.post("/tours/extract", async (req, res) => {
-  const userId = userIdFromReq(req);
-  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+  const userId = await userIdFromReq(req);
+  if (!userId) {
+    return res.status(401).json({
+      error: "Unauthorized",
+      message: "Sign in required.",
+    });
+  }
 
   const tourId = req.body?.tourId;
   if (!isUuid(tourId)) return res.status(400).json({ error: "Invalid tourId" });
@@ -219,14 +224,12 @@ router.post("/tours/extract", async (req, res) => {
 
   const uploadedPublic = (
     await Promise.all(
-      uploadedImages
-        .slice(0, 30)
-        .map((img) => uploadDataUrlToStorage(img.dataUrl, userId, req)),
+      uploadedImages.map((img) => uploadDataUrlToStorage(img.dataUrl, userId, req)),
     )
   ).filter((u): u is string => !!u);
 
   collected.push(...uploadedPublic);
-  const unique = [...new Set(collected)];
+  const unique = filterListingImageUrls([...new Set(collected)]);
 
   mem.sourceImageUrls = unique;
   mem.imageCount = unique.length;
@@ -258,8 +261,13 @@ router.post("/tours/extract", async (req, res) => {
 
 // POST /tours/classify
 router.post("/tours/classify", async (req, res) => {
-  const userId = userIdFromReq(req);
-  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+  const userId = await userIdFromReq(req);
+  if (!userId) {
+    return res.status(401).json({
+      error: "Unauthorized",
+      message: "Sign in required.",
+    });
+  }
 
   const tourId = req.body?.tourId;
   if (!isUuid(tourId)) return res.status(400).json({ error: "Invalid tourId" });
@@ -336,8 +344,13 @@ router.post("/tours/classify", async (req, res) => {
 
 // POST /tours/generate
 router.post("/tours/generate", async (req, res) => {
-  const userId = userIdFromReq(req);
-  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+  const userId = await userIdFromReq(req);
+  if (!userId) {
+    return res.status(401).json({
+      error: "Unauthorized",
+      message: "Sign in required.",
+    });
+  }
 
   const tourId = req.body?.tourId;
   if (!isUuid(tourId)) return res.status(400).json({ error: "Invalid tourId" });
@@ -381,8 +394,13 @@ router.post("/tours/generate", async (req, res) => {
 
 // GET /tours/status/:tourId
 router.get("/tours/status/:tourId", async (req, res) => {
-  const userId = userIdFromReq(req);
-  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+  const userId = await userIdFromReq(req);
+  if (!userId) {
+    return res.status(401).json({
+      error: "Unauthorized",
+      message: "Sign in required.",
+    });
+  }
 
   try {
     await advanceTourGeneration(req.params.tourId, userId, req.log);
