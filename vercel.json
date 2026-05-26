@@ -3,6 +3,9 @@
   "version": 2,
   "installCommand": "corepack enable && corepack prepare pnpm@10.18.3 --activate && pnpm install --no-frozen-lockfile",
   "buildCommand": "pnpm --filter @workspace/tourvision vercel-build",
+  "env": {
+    "PNPM_CONFIG_FROZEN_LOCKFILE": "false"
+  },
   "builds": [
     {
       "src": "artifacts/tourvision/api/[...slug].js",

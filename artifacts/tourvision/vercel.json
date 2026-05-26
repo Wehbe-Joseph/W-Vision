@@ -3,6 +3,9 @@
   "version": 2,
   "installCommand": "cd ../.. && corepack enable && corepack prepare pnpm@10.18.3 --activate && pnpm install --no-frozen-lockfile",
   "buildCommand": "pnpm run vercel-build",
+  "env": {
+    "PNPM_CONFIG_FROZEN_LOCKFILE": "false"
+  },
   "builds": [
     {
       "src": "api/[...slug].js",
