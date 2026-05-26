@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
-  "installCommand": "corepack enable && pnpm install --frozen-lockfile",
+  "installCommand": "corepack enable && corepack prepare pnpm@10.18.3 --activate && pnpm install --no-frozen-lockfile",
   "buildCommand": "pnpm --filter @workspace/tourvision vercel-build",
   "builds": [
     {
