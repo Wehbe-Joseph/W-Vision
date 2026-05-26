@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import fs from "fs";
+import os from "os";
 import path from "path";
 import https from "https";
 import http from "http";
@@ -53,9 +54,24 @@ function buildPanoramaPrompt(roomType: string, referenceCount: number): string {
   ].join(" ");
 }
 
+function isServerlessDeploy(): boolean {
+  return process.env.VERCEL === "1" || Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME);
+}
+
 function tourvisionPublicPanoramasDir(): string {
   const here = path.dirname(fileURLToPath(import.meta.url));
   return path.resolve(here, "../../../tourvision/public/panoramas");
+}
+
+function localPanoramaDir(): string {
+  if (isServerlessDeploy()) {
+    return path.join(os.tmpdir(), "wvision-panoramas");
+  }
+  return tourvisionPublicPanoramasDir();
+}
+
+function canWriteLocalPanoramaFiles(): boolean {
+  return !isServerlessDeploy();
 }
 
 function downloadImage(url: string, filepath: string, redirectCount = 0): Promise<void> {
@@ -251,7 +267,7 @@ export async function generatePanorama(
         "OpenAI returned b64_json panorama",
       );
     } else if (generatedUrl) {
-      const dir = tourvisionPublicPanoramasDir();
+      const dir = localPanoramaDir();
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       const tempPath = path.join(dir, `_tmp-${tourId}-${Date.now()}.jpg`);
       await downloadImage(generatedUrl, tempPath);
@@ -271,16 +287,8 @@ export async function generatePanorama(
     const slug = roomType.toLowerCase().replace(/\s+/g, "-");
     const filename = `${tourId}-${slug}-${Date.now()}.jpg`;
 
-    const localDir = tourvisionPublicPanoramasDir();
-    if (!fs.existsSync(localDir)) {
-      fs.mkdirSync(localDir, { recursive: true });
-    }
-    const filepath = path.join(localDir, filename);
-    fs.writeFileSync(filepath, imageBuffer);
-
-    const relativePath = `/panoramas/${filename}`;
-
     let publicUrl: string | null = null;
+    let uploadIsLocal = false;
     try {
       const uploaded = await uploadTourImage(
         imageBuffer,
@@ -288,16 +296,39 @@ export async function generatePanorama(
         `panoramas/${tourId}`,
       );
       publicUrl = uploaded.publicUrl;
+      uploadIsLocal = uploaded.isLocal;
     } catch (uploadErr) {
       logger.warn({ err: uploadErr, tourId }, "Supabase panorama upload failed");
     }
 
+    if (isServerlessDeploy() && (!publicUrl || uploadIsLocal)) {
+      logger.error(
+        { tourId, roomType, hasUrl: !!publicUrl, uploadIsLocal },
+        "Panorama must be stored in Supabase on Vercel — check SUPABASE_URL and service role key",
+      );
+      return null;
+    }
+
+    if (canWriteLocalPanoramaFiles()) {
+      const localDir = tourvisionPublicPanoramasDir();
+      if (!fs.existsSync(localDir)) {
+        fs.mkdirSync(localDir, { recursive: true });
+      }
+      const filepath = path.join(localDir, filename);
+      try {
+        fs.writeFileSync(filepath, imageBuffer);
+      } catch (writeErr) {
+        logger.warn({ err: writeErr, tourId, filepath }, "Local panorama file write skipped");
+      }
+    }
+
+    const relativePath = `/panoramas/${filename}`;
     const origin =
       process.env.TOURVISION_PUBLIC_URL?.replace(/\/$/, "") ||
       resolvePublicApiBaseUrl().replace(/\/$/, "");
 
     const panoramaUrl = publicUrl ?? `${origin}${relativePath}`;
-    logger.info({ panoramaUrl, roomType, relativePath }, "Panorama saved");
+    logger.info({ panoramaUrl, roomType, storedInSupabase: !uploadIsLocal }, "Panorama saved");
     return panoramaUrl;
   } catch (error) {
     logger.error({ err: error, roomType, tourId }, "Panorama generation failed");
