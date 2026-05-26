@@ -290,7 +290,7 @@ export default function TourViewer() {
               className="mt-5 bg-white text-black hover:bg-white/90"
               onClick={() => setLocation("/dashboard/billing")}
             >
-              Unlock full house
+              View pricing — unlock $29
             </Button>
           </div>
         </div>

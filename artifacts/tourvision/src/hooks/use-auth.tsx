@@ -11,6 +11,7 @@ import {
 import { setAuthTokenGetter, setBaseUrl } from "@workspace/api-client-react";
 import { supabase, supabaseEnvError } from "@/lib/supabase";
 import { resolveApiBaseUrl } from "@/lib/resolve-api-base";
+import { getAuthCallbackUrl } from "@/lib/site-url";
 import type { Session, User } from "@supabase/supabase-js";
 
 export interface AuthUser {
@@ -138,10 +139,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!supabase) {
       throw new Error(supabaseEnvError ?? "Supabase is not configured.");
     }
-    const redirectTo = `${window.location.origin}/dashboard`;
+    const redirectTo = getAuthCallbackUrl();
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo },
+      options: {
+        redirectTo,
+        skipBrowserRedirect: false,
+      },
     });
     if (error) throw error;
   }, []);
@@ -167,7 +171,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         password,
         options: {
           data: fullName ? { full_name: fullName } : undefined,
-          emailRedirectTo: `${window.location.origin}/dashboard`,
+          emailRedirectTo: getAuthCallbackUrl(),
         },
       });
       if (error) throw error;

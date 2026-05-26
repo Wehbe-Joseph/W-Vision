@@ -1,5 +1,5 @@
-/** Production Vercel deployment — used as docs default and VERCEL_URL fallback hint. */
-export const PRODUCTION_SITE_URL = "https://w-vision-tourvision-iauj.vercel.app";
+/** Production custom domain — fallback when env vars are unset on Vercel. */
+export const PRODUCTION_SITE_URL = "https://getwvision.com";
 
 function isLocalhostUrl(value: string): boolean {
   return /localhost|127\.0\.0\.1|:8080\b|:18992\b/i.test(value);
@@ -14,6 +14,13 @@ function isLocalhostUrl(value: string): boolean {
  * 3. http://localhost:8080 in local development only
  */
 export function resolvePublicApiBaseUrl(): string {
+  const tourvisionPublic = (process.env.TOURVISION_PUBLIC_URL ?? "")
+    .trim()
+    .replace(/\/+$/, "");
+  if (tourvisionPublic && !isLocalhostUrl(tourvisionPublic)) {
+    return tourvisionPublic;
+  }
+
   const configured = (process.env.PUBLIC_API_BASE_URL ?? "").trim().replace(/\/+$/, "");
   if (configured && !isLocalhostUrl(configured)) {
     return configured;

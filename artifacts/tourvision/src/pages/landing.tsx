@@ -11,6 +11,7 @@ import { useAuth } from "@/hooks/use-auth";
 import {
   savePendingTour, filesToPendingPhotos, PendingPhoto
 } from "@/hooks/use-pending-tour";
+import { PricingPlans } from "@/components/billing/PricingPlans";
 
 export default function Landing() {
   const { isAuthenticated } = useAuth();
@@ -525,59 +526,20 @@ export default function Landing() {
 
         {/* ── PRICING ── */}
         <section id="pricing" className="mx-auto px-6 max-w-7xl pb-24">
-          <div className="mb-12">
+          <div className="mb-12 max-w-2xl">
             <div className="flex items-center gap-2 mb-3">
               <span className="w-2.5 h-2.5 bg-primary" />
               <span className="text-xs font-mono font-bold uppercase tracking-widest">Pricing</span>
             </div>
-            <h2 className="text-5xl md:text-6xl font-serif">FOUNDING LAUNCH OFFER</h2>
+            <h2 className="text-5xl md:text-6xl font-serif">SIMPLE, HONEST PRICING</h2>
+            <p className="text-muted-foreground mt-4 text-sm leading-relaxed">
+              Start with one free 360° room. Love it? Unlock every room in that
+              tour for a single $29 payment. No subscription required to get
+              started.
+            </p>
           </div>
 
-          <div className="max-w-3xl border-2 border-foreground bg-card shadow-[8px_8px_0px_0px_#1A1714]">
-            <div className="flex items-center gap-2 px-4 py-2 border-b-2 border-foreground bg-foreground text-background">
-              <span className="w-2 h-2 bg-primary" />
-              <span className="text-xs font-mono font-bold uppercase tracking-widest">
-                Founding Launch Offer - $59 upfront
-              </span>
-            </div>
-            <div className="p-7 flex flex-col gap-6">
-              <div>
-                <div className="text-6xl font-serif">$59</div>
-                <p className="text-sm text-muted-foreground mt-2">
-                  Full immersive AI-generated property walkthroughs.
-                </p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  First month free, then $13/month.
-                </p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Or pay $100/year.
-                </p>
-              </div>
-              <ul className="space-y-2.5">
-                {[
-                  "Full property immersive walkthrough",
-                  "All rooms",
-                  "Hosted shareable tour",
-                  "Room navigation",
-                  "Premium property page",
-                ].map((feature) => (
-                  <li key={feature} className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <CheckCircle2 className="w-4 h-4 shrink-0 text-primary" />
-                    {feature}
-                  </li>
-                ))}
-              </ul>
-              <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
-                Early access pricing available during beta launch.
-              </p>
-              <Button className="w-full md:w-auto" onClick={handleCreate}>
-                Pay $59 - First Month Free <ArrowRight className="w-4 h-4 ml-1" />
-              </Button>
-              <Button variant="outline" className="w-full md:w-auto" onClick={handleCreate}>
-                Choose $100/Year <ArrowRight className="w-4 h-4 ml-1" />
-              </Button>
-            </div>
-          </div>
+          <PricingPlans onGetStarted={handleCreate} variant="landing" />
         </section>
       </main>
 

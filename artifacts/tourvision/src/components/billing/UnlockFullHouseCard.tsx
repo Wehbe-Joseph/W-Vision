@@ -1,65 +1,23 @@
-import { useState } from "react";
 import { Lock, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/hooks/use-auth";
-import { getApiUrl } from "@/lib/runtime-api";
+import { Link } from "wouter";
 
 type Props = {
   tourId: string;
   lockedRoomsCount: number;
   roomsDetected?: number;
   className?: string;
-  onUnlocked?: () => void;
 };
 
 export default function UnlockFullHouseCard({
-  tourId,
+  tourId: _tourId,
   lockedRoomsCount,
   roomsDetected,
   className = "",
-  onUnlocked,
 }: Props) {
-  const { toast } = useToast();
-  const { getAccessToken } = useAuth();
-  const [loading, setLoading] = useState(false);
-
   if (lockedRoomsCount <= 0) return null;
 
   const total = roomsDetected ?? lockedRoomsCount + 1;
-
-  async function startCheckout() {
-    setLoading(true);
-    try {
-      const token = await getAccessToken();
-      const res = await fetch(getApiUrl("/api/billing/checkout/full-house"), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ tourId }),
-      });
-      const data = (await res.json()) as { url?: string; message?: string; error?: string };
-      if (!res.ok) {
-        throw new Error(data.message ?? data.error ?? "Checkout failed");
-      }
-      if (data.url) {
-        window.location.href = data.url;
-        return;
-      }
-      throw new Error("No checkout URL returned");
-    } catch (err) {
-      toast({
-        title: "Could not start checkout",
-        description: err instanceof Error ? err.message : "Try again in a moment.",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-      onUnlocked?.();
-    }
-  }
 
   return (
     <div
@@ -88,17 +46,14 @@ export default function UnlockFullHouseCard({
             </li>
             <li className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-primary shrink-0" />
-              One-time purchase — no subscription required
+              One-time purchase — card checkout coming next
             </li>
           </ul>
-          <Button
-            className="mt-2 w-full sm:w-auto font-bold"
-            size="lg"
-            disabled={loading}
-            onClick={() => void startCheckout()}
-          >
-            {loading ? "Redirecting to Stripe…" : "Unlock full house — $29"}
-          </Button>
+          <Link href="/dashboard/billing">
+            <Button className="mt-2 w-full sm:w-auto font-bold" size="lg">
+              View pricing — $29 full house
+            </Button>
+          </Link>
         </div>
       </div>
     </div>

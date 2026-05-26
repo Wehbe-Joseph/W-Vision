@@ -32,8 +32,9 @@ In [Vercel](https://vercel.com) → your project → **Settings** → **Environm
 
 | Variable | Source |
 |----------|--------|
-| `VITE_SUPABASE_URL` | `artifacts/tourvision/.env` |
-| `VITE_SUPABASE_ANON_KEY` | `artifacts/tourvision/.env` |
+| `VITE_SUPABASE_URL` | Supabase project settings |
+| `VITE_SUPABASE_ANON_KEY` | Supabase project settings |
+| `VITE_SITE_URL` | `https://getwvision.com` (required for Google OAuth) |
 
 **API (runtime — serverless function):**
 
@@ -59,25 +60,34 @@ Apply variables to **Production**, **Preview**, and **Development**, then **Rede
 
 ---
 
-## 2. Supabase Auth URLs
+## 2. Supabase Auth URLs (fixes Google “unsupported” redirect)
 
 Supabase → **Authentication** → **URL Configuration**:
 
-- **Site URL**: `https://w-vision-tourvision-iauj.vercel.app`
-- **Redirect URLs**:
-  - `https://w-vision-tourvision-iauj.vercel.app`
-  - `https://w-vision-tourvision-iauj.vercel.app/dashboard`
-  - `https://w-vision-tourvision-iauj.vercel.app/login`
+- **Site URL**: `https://getwvision.com`
+- **Redirect URLs** (add every host you use):
+  - `https://getwvision.com/**`
+  - `https://www.getwvision.com/**`
+  - `https://getwvision.com/auth/callback`
+  - `https://www.getwvision.com/auth/callback`
+  - `https://*.vercel.app/**` (preview deploys)
+
+Google Cloud Console → **APIs & Services** → **Credentials** → your OAuth client:
+
+- **Authorized JavaScript origins**: `https://getwvision.com`, `https://www.getwvision.com`
+- **Authorized redirect URIs**: only Supabase’s callback, e.g. `https://YOUR_PROJECT_REF.supabase.co/auth/v1/callback` (not your app domain)
+
+The app sends users to `/auth/callback` after Supabase finishes; that path must be listed above.
 
 ---
 
 ## 3. Verify after deploy
 
 ```bash
-curl https://w-vision-tourvision-iauj.vercel.app/api/healthz
+curl https://getwvision.com/api/healthz
 # {"status":"ok"}
 
-curl https://w-vision-tourvision-iauj.vercel.app/api/healthz/integrations
+curl https://getwvision.com/api/healthz/integrations
 # {"status":"ok","integrations":{"apify":{"configured":true},...}}
 ```
 

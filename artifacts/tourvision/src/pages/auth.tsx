@@ -21,6 +21,14 @@ export function AuthPage({ mode }: { mode: "login" | "signup" }) {
   const [error, setError] = useState<string | null>(null);
   const [emailSent, setEmailSent] = useState(false);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const err = params.get("error");
+    if (err) {
+      setError(decodeURIComponent(err.replace(/\+/g, " ")));
+    }
+  }, []);
+
   // The auth provider drives navigation: as soon as a session exists we
   // route to the dashboard. Doing this exclusively from a useEffect avoids
   // a race where setLocation fires before isAuthenticated has flipped, which

@@ -10,6 +10,7 @@ import { useEffect, useRef } from "react";
 
 import Landing from "@/pages/landing";
 import { AuthPage } from "@/pages/auth";
+import AuthCallback from "@/pages/auth-callback";
 import Onboarding from "@/pages/onboarding";
 import DashboardHome from "@/pages/dashboard/home";
 import NewTour from "@/pages/dashboard/new-tour";
@@ -86,6 +87,7 @@ function Router() {
         <Route path="/" component={() => <PublicRoute component={Landing} />} />
         <Route path="/login" component={() => <PublicRoute component={() => <AuthPage mode="login" />} />} />
         <Route path="/signup" component={() => <PublicRoute component={() => <AuthPage mode="signup" />} />} />
+        <Route path="/auth/callback" component={() => <PublicRoute component={AuthCallback} />} />
         <Route path="/onboarding" component={() => <PublicRoute component={Onboarding} />} />
         <Route path="/dashboard" component={() => <ProtectedRoute component={DashboardHome} />} />
         <Route path="/dashboard/new-tour" component={() => <ProtectedRoute component={NewTour} />} />

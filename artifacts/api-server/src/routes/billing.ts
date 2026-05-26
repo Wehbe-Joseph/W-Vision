@@ -18,8 +18,14 @@ const router = Router();
 
 function siteOrigin(): string {
   const tourvision = (process.env.TOURVISION_PUBLIC_URL ?? "").trim().replace(/\/+$/, "");
-  if (tourvision) return tourvision;
-  return resolvePublicApiBaseUrl().replace(/\/api$/, "").replace(/\/+$/, "");
+  if (tourvision && !/localhost|127\.0\.0\.1/i.test(tourvision)) {
+    return tourvision;
+  }
+  const resolved = resolvePublicApiBaseUrl().replace(/\/api$/, "").replace(/\/+$/, "");
+  if (!/localhost|127\.0\.0\.1/i.test(resolved)) {
+    return resolved;
+  }
+  return "https://getwvision.com";
 }
 
 router.get("/billing/config", (_req, res) => {
