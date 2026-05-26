@@ -213,6 +213,9 @@ importers:
       sharp:
         specifier: ^0.34.5
         version: 0.34.5
+      ws:
+        specifier: ^8.18.3
+        version: 8.20.0
     devDependencies:
       '@types/adm-zip':
         specifier: ^0.5.8
@@ -232,6 +235,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 25.3.5
+      '@types/ws':
+        specifier: ^8.18.1
+        version: 8.18.1
       esbuild:
         specifier: 0.27.3
         version: 0.27.3
@@ -457,6 +463,9 @@ importers:
       sharp:
         specifier: ^0.34.5
         version: 0.34.5
+      ws:
+        specifier: ^8.18.3
+        version: 8.20.0
     devDependencies:
       '@hookform/resolvers':
         specifier: ^3.10.0
