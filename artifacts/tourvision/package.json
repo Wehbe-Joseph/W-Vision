@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --config vite.config.ts --host 0.0.0.0",
-    "build": "cd ../.. && VERCEL=1 pnpm --filter @workspace/api-server build && cp artifacts/api-server/dist/serverless.mjs artifacts/tourvision/api/serverless.mjs && cp artifacts/api-server/dist/serverless.mjs api/serverless.mjs && test -f artifacts/tourvision/api/serverless.mjs && vite build --config vite.config.ts && echo ok > dist/public/.api-bundle-ready",
+    "build": "cd ../.. && VERCEL=1 pnpm --filter @workspace/api-server build && cp artifacts/api-server/dist/serverless.mjs artifacts/tourvision/api/serverless.mjs && cp artifacts/api-server/dist/serverless.mjs api/serverless.mjs && test -f artifacts/tourvision/api/serverless.mjs && cd artifacts/tourvision && vite build --config vite.config.ts && echo ok > dist/public/.api-bundle-ready",
     "vercel-build": "pnpm run build",
     "now-build": "pnpm run build",
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
