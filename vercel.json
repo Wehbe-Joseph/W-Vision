@@ -1,21 +1,32 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": null,
+  "version": 2,
   "installCommand": "pnpm install",
   "buildCommand": "pnpm --filter @workspace/tourvision vercel-build",
-  "outputDirectory": "artifacts/tourvision/dist/public",
-  "rewrites": [
-    { "handle": "filesystem" },
+  "builds": [
     {
-      "source": "/(.*)",
-      "destination": "/index.html"
+      "src": "artifacts/tourvision/api/[...slug].js",
+      "use": "@vercel/node",
+      "config": {
+        "maxDuration": 300,
+        "memory": 3008,
+        "includeFiles": "artifacts/tourvision/api/serverless.mjs"
+      }
+    },
+    {
+      "src": "artifacts/tourvision/package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "artifacts/tourvision/dist/public"
+      }
     }
   ],
-  "functions": {
-    "api/[...slug].js": {
-      "maxDuration": 300,
-      "memory": 3008,
-      "includeFiles": "api/serverless.mjs"
-    }
-  }
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "artifacts/tourvision/api/[...slug].js"
+    },
+    { "handle": "filesystem" },
+    { "src": "/(.*)", "dest": "/index.html" }
+  ]
 }

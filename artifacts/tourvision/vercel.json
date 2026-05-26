@@ -1,21 +1,29 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": null,
+  "version": 2,
   "installCommand": "cd ../.. && pnpm install",
   "buildCommand": "pnpm run vercel-build",
-  "outputDirectory": "dist/public",
-  "rewrites": [
-    { "handle": "filesystem" },
+  "builds": [
     {
-      "source": "/(.*)",
-      "destination": "/index.html"
+      "src": "api/[...slug].js",
+      "use": "@vercel/node",
+      "config": {
+        "maxDuration": 300,
+        "memory": 3008,
+        "includeFiles": "api/serverless.mjs"
+      }
+    },
+    {
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist/public"
+      }
     }
   ],
-  "functions": {
-    "api/[...slug].js": {
-      "maxDuration": 300,
-      "memory": 3008,
-      "includeFiles": "api/serverless.mjs"
-    }
-  }
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/api/[...slug].js" },
+    { "handle": "filesystem" },
+    { "src": "/(.*)", "dest": "/index.html" }
+  ]
 }
