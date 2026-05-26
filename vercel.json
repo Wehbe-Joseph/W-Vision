@@ -1,20 +1,18 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
   "installCommand": "pnpm install",
   "buildCommand": "pnpm --filter @workspace/tourvision vercel-build",
   "outputDirectory": "artifacts/tourvision/dist/public",
   "rewrites": [
-    {
-      "source": "/api/(.*)",
-      "destination": "/api"
-    },
+    { "handle": "filesystem" },
     {
       "source": "/(.*)",
       "destination": "/index.html"
     }
   ],
   "functions": {
-    "api/index.js": {
+    "api/[...slug].js": {
       "maxDuration": 300,
       "memory": 3008,
       "includeFiles": "api/serverless.mjs"

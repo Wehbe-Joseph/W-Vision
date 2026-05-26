@@ -16,7 +16,7 @@ Copy env vars from `artifacts/tourvision/.env.vercel.example` into the Vercel da
 | **Build / Install commands** | leave empty (uses `vercel.json`), or set Build Command to `pnpm run build` — **not** `vite build` alone (that skips the API bundle) |
 | **Include files outside root directory** | **Enabled** (required for monorepo build) |
 
-The Express API is deployed via `artifacts/tourvision/api/index.js` with rewrite `/api/*` → `/api` (imports bundled `api/serverless.mjs` at build time). It is **not** a separate Railway service unless you choose that option below.
+The Express API is deployed via `artifacts/tourvision/api/[...slug].js` (Vercel catch-all for **all** `/api/*` paths; imports bundled `api/serverless.mjs` at build time). It is **not** a separate Railway service unless you choose that option below.
 
 If Root Directory is wrong, `/api/*` never deploys and tour generation fails. After deploy, `curl https://YOUR_APP.vercel.app/api/healthz` must return JSON like `{"status":"ok"}`, not `FUNCTION_INVOCATION_FAILED`.
 
@@ -93,8 +93,8 @@ See `Dockerfile` and `railway.toml` if you want the API on Railway instead. In t
 | Symptom | Fix |
 |---------|-----|
 | **`FUNCTION_INVOCATION_FAILED`** on every `/api/*` call | Usually **`DATABASE_URL` missing** on Vercel. Add all API vars from `.env.vercel.example`, redeploy, then `curl .../api/healthz/integrations` |
-| HTTP **405** on `/api/*` (HTML response) | SPA rewrite is catching `/api` — redeploy latest `main`; `vercel.json` must rewrite `/api/(.*)` → `/api` before the `index.html` rule |
-| HTTP **404** on `/api/*` | Confirm Root Directory is `artifacts/tourvision` and `api/index.js` exists after build |
+| HTTP **405** on `/api/*` (HTML response) | API function not deployed — use `api/[...slug].js` (not `api/index.js` alone); confirm build log runs `@workspace/api-server build`; `curl /api/healthz` must return JSON not HTML |
+| HTTP **404** on `/api/*` | Confirm Root Directory is `artifacts/tourvision` and `api/[...slug].js` exists after build |
 | Apify / Gemini never called | Open `/api/healthz/integrations` — add missing env vars on Vercel |
 | Generation starts then stops | Check Vercel function logs; DB / classification errors |
 | Build fails on `serverless.mjs` | Run `pnpm --filter @workspace/api-server build` before deploy |
