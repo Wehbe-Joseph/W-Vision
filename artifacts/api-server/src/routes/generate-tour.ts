@@ -25,6 +25,7 @@ import { PIPELINE_STAGE_LABELS } from "../lib/tourPipeline";
 import { GenerateTourBody } from "@workspace/api-zod";
 import { requireProfileId } from "../lib/resolveProfileId";
 import { filterListingImageUrls } from "../lib/listingImageFilter";
+import { logger } from "../lib/logger";
 
 const router = Router();
 
@@ -202,11 +203,15 @@ router.post("/generate-tour", async (req, res) => {
 
     if (process.env.VERCEL) {
       // Serverless: no background timers — each GET /status (and this kick) advances work.
-      waitUntil(
-        advanceTourGeneration(tourId, userId, req.log).catch((err) => {
-          req.log.error({ err, tourId }, "Status-driven generation tick failed");
-        }),
-      );
+      try {
+        waitUntil(
+          advanceTourGeneration(tourId, userId, req.log ?? logger).catch((err) => {
+            (req.log ?? logger).error({ err, tourId }, "Status-driven generation tick failed");
+          }),
+        );
+      } catch (waitErr) {
+        (req.log ?? logger).warn({ err: waitErr, tourId }, "waitUntil unavailable — generation continues on status polls");
+      }
       return;
     }
 
@@ -222,7 +227,7 @@ router.post("/generate-tour", async (req, res) => {
     });
     return;
   } catch (err) {
-    req.log.error(err);
+    (req.log ?? logger).error(err);
     return res.status(500).json({ error: "Internal server error" });
   }
 });

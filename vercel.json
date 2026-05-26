@@ -8,7 +8,7 @@
   },
   "builds": [
     {
-      "src": "artifacts/tourvision/api/[...slug].js",
+      "src": "artifacts/tourvision/api/index.js",
       "use": "@vercel/node",
       "config": {
         "maxDuration": 300,
@@ -27,7 +27,7 @@
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "artifacts/tourvision/api/[...slug].js"
+      "dest": "artifacts/tourvision/api/index.js"
     },
     { "handle": "filesystem" },
     { "src": "/(.*)", "dest": "/index.html" }
