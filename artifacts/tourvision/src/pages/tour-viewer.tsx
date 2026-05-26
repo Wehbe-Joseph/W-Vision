@@ -18,6 +18,7 @@ import {
   panoramaUrlForViewer,
   pickPanoramaRoomsForViewer,
 } from "@/lib/panorama-rooms";
+import UnlockFullHouseCard from "@/components/billing/UnlockFullHouseCard";
 
 interface TourPhotoPanorama {
   roomLabel?: string | null;
@@ -35,6 +36,7 @@ interface ScenePanorama {
   roomType?: string;
   generationStatus?: string;
   generatedTourUrl?: string | null;
+  locked?: boolean;
 }
 
 interface PublicTourLike {
@@ -45,6 +47,7 @@ interface PublicTourLike {
   generationStatus?: string | null;
   panoramaStatus?: string | null;
   isFullHouse?: boolean;
+  fullHouseUnlocked?: boolean;
   previewImageUrl?: string | null;
   rooms?: TourPhotoPanorama[];
   scenes?: ScenePanorama[];
@@ -281,12 +284,13 @@ export default function TourViewer() {
             <p className="text-white/90 text-lg font-medium">This tour is frozen.</p>
             <p className="text-white/60 mt-2 text-sm">
               Free tours are available for 24 hours, then automatically frozen.
+              Pay $29 to unlock the full house and remove the countdown.
             </p>
             <Button
               className="mt-5 bg-white text-black hover:bg-white/90"
-              onClick={() => setLocation("/")}
+              onClick={() => setLocation("/dashboard/billing")}
             >
-              Back home
+              Unlock full house
             </Button>
           </div>
         </div>
@@ -333,6 +337,19 @@ export default function TourViewer() {
   const hasPanoramas = panoramaRooms.length > 0;
   const has360Panoramas =
     hasPanoramas && panoramaRooms.some((r) => hasAiPanorama(r));
+
+  const lockedRoomsCount = useMemo(
+    () =>
+      (tour?.scenes ?? []).filter(
+        (s) => s.locked && s.generationStatus !== "completed",
+      ).length,
+    [tour?.scenes],
+  );
+  const showUnlockCta =
+    canEditTour &&
+    !!tour?.id &&
+    lockedRoomsCount > 0 &&
+    !tour.fullHouseUnlocked;
 
   return (
     <div className="fixed inset-0 bg-[#080808] text-white overflow-hidden">
@@ -389,6 +406,15 @@ export default function TourViewer() {
               loading={addingRoom}
               onSubmit={handleAddRoom}
             />
+            {showUnlockCta ? (
+              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 w-full max-w-lg px-4 pointer-events-auto">
+                <UnlockFullHouseCard
+                  tourId={tour.id!}
+                  lockedRoomsCount={lockedRoomsCount}
+                  className="border-white/20 bg-black/80 text-white [&_h3]:text-white [&_p]:text-white/70"
+                />
+              </div>
+            ) : null}
           </>
         ) : !generating && hasPanoramas ? (
           <div className="w-full h-full flex items-center justify-center px-6 text-center">

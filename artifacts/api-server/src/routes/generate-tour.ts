@@ -20,7 +20,14 @@ import {
   saveTourSourceImages,
 } from "../lib/tourGenerationDriver";
 import { runFullTourPipeline } from "../lib/tourPipeline";
-import { setMemUserTier } from "../lib/userMemoryStore";
+import { getMemUser, setMemUserTier } from "../lib/userMemoryStore";
+import { memTotalToursForUser } from "../lib/tourMemoryStore";
+import {
+  freeTierExpiresAtDate,
+  isPaidSubscriptionTier,
+  type SubscriptionTier,
+} from "../lib/tourBilling";
+import { resumeFullHouseGeneration } from "../lib/tourGenerationDriver";
 import { PIPELINE_STAGE_LABELS } from "../lib/tourPipeline";
 import { GenerateTourBody } from "@workspace/api-zod";
 import { requireProfileId } from "../lib/resolveProfileId";
@@ -61,19 +68,38 @@ router.post("/generate-tour", async (req, res) => {
     const imageUrls: string[] = parsed.data.imageUrls ?? [];
     const uploadedImages: { name: string; dataUrl: string }[] = parsed.data.uploadedImages ?? [];
 
+    let subscriptionTier: SubscriptionTier = "free";
+    let profileTotalTours = 0;
     try {
       const profile = await db.query.profilesTable.findFirst({
         where: eq(profilesTable.id, userId),
       });
       if (profile?.subscriptionTier) {
-        setMemUserTier(
-          userId,
-          profile.subscriptionTier as "free" | "pro" | "unlimited",
-        );
+        subscriptionTier = profile.subscriptionTier as SubscriptionTier;
+        setMemUserTier(userId, subscriptionTier);
       }
+      profileTotalTours = profile?.totalTours ?? 0;
     } catch {
       req.log.warn("DB unavailable for profile lookup");
+      subscriptionTier = getMemUser(userId).tier;
     }
+
+    const paidPlan = isPaidSubscriptionTier(subscriptionTier);
+    if (!paidPlan) {
+      const toursUsed = Math.max(profileTotalTours, memTotalToursForUser(userId));
+      if (toursUsed >= 1) {
+        return res.status(403).json({
+          error: "Tour limit reached",
+          code: "LIMIT_REACHED",
+          message:
+            "Free accounts include one tour. Unlock your existing tour for $29 or upgrade to Pro.",
+        });
+      }
+    }
+
+    const tourExpiresAt = paidPlan ? null : freeTierExpiresAtDate();
+    const fullHouseUnlocked = paidPlan;
+    const createdOnTier = subscriptionTier;
 
     // Build the final image URL list
     const allImageUrls = [...imageUrls];
@@ -153,9 +179,10 @@ router.post("/generate-tour", async (req, res) => {
       imageCount: totalImageCount,
       viewCount: 0,
       completedAt: null,
-      expiresAt: null,
+      expiresAt: tourExpiresAt?.getTime() ?? null,
       frozen: false,
-      createdOnTier: "unlimited",
+      createdOnTier,
+      fullHouseUnlocked,
       scenes: [],
       sourceImageUrls: publicImageUrls,
       pipelineStage: 1,
@@ -310,6 +337,17 @@ router.get("/generate-tour/:tourId/status", async (req, res) => {
       roomsReady: mem?.roomsReady ?? tour.roomsReady ?? 0,
       shareToken: tour.shareToken,
       scenes: (mem?.scenes ?? []).map(serializeScene),
+      lockedRoomsCount:
+        mem?.scenes.filter((s) => s.locked && s.generationStatus !== "completed")
+          .length ?? 0,
+      fullHouseUnlocked: mem?.fullHouseUnlocked ?? tour.fullHouseUnlocked ?? false,
+      requiresUpgrade:
+        (mem?.scenes.some((s) => s.locked) ?? false) &&
+        !(mem?.fullHouseUnlocked ?? tour.fullHouseUnlocked),
+      expiresAt: mem?.expiresAt ?? tour.expiresAt?.getTime() ?? null,
+      frozen: mem?.frozen ?? tour.frozen ?? false,
+      createdOnTier: mem?.createdOnTier ?? tour.createdOnTier ?? "free",
+      fullHousePriceUsd: 29,
     });
   }
 
@@ -390,9 +428,11 @@ router.post("/generate-tour/:tourId/resume", async (req, res) => {
         imageCount: tour.photosUsed ?? 0,
         viewCount: tour.viewCount,
         completedAt: null,
-        expiresAt: null,
-        frozen: false,
-        createdOnTier: "unlimited",
+        expiresAt: tour.expiresAt?.getTime() ?? null,
+        frozen: tour.frozen ?? false,
+        createdOnTier:
+          (tour.createdOnTier as "free" | "pro" | "unlimited") ?? "free",
+        fullHouseUnlocked: tour.fullHouseUnlocked ?? false,
         scenes,
         sourceImageUrls: [],
       });
@@ -406,18 +446,23 @@ router.post("/generate-tour/:tourId/resume", async (req, res) => {
     return res.status(404).json({ error: "Tour not found" });
   }
 
+  if (!mem.fullHouseUnlocked) {
+    return res.status(402).json({
+      error: "Payment required",
+      code: "PAYMENT_REQUIRED",
+      message: "Unlock the full house for $29 to generate every room.",
+    });
+  }
+
   const imageUrls =
     mem.sourceImageUrls?.length
       ? mem.sourceImageUrls
       : mem.scenes.flatMap((s) => s.imageUrls);
 
-  res.json({ success: true, message: "Resuming tour generation…" });
+  res.json({ success: true, message: "Resuming full-house generation…" });
 
-  void runFullTourPipeline({
-    tourId: req.params.tourId,
-    userId,
-    imageUrls,
-    reqLog: req.log,
+  void resumeFullHouseGeneration(req.params.tourId, userId, req.log).catch((err) => {
+    req.log.error({ err, tourId: req.params.tourId }, "Resume full-house failed");
   });
 });
 

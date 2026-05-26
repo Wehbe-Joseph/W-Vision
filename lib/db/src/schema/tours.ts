@@ -46,6 +46,14 @@ export const toursTable = pgTable("tours", {
   generatedTourUrl: text("generated_tour_url"),
   previewImageUrl: text("preview_image_url"),
   generationRetries: integer("generation_retries").notNull().default(0),
+  /** When the free-tier viewing window ends (null = no expiry). */
+  expiresAt: timestamp("expires_at"),
+  /** True after the free viewing window passes or manual freeze. */
+  frozen: boolean("frozen").notNull().default(false),
+  /** Tier at creation — drives one-room preview vs full house. */
+  createdOnTier: text("created_on_tier").notNull().default("free"),
+  /** Paid $29 unlock or subscription — generate all rooms. */
+  fullHouseUnlocked: boolean("full_house_unlocked").notNull().default(false),
 });
 
 export const insertTourSchema = createInsertSchema(toursTable).omit({ id: true, createdAt: true });

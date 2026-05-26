@@ -3,6 +3,7 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import pinoHttp from "pino-http";
 import router from "./routes";
+import { stripeWebhookHandler } from "./routes/billing.js";
 import { logger } from "./lib/logger";
 import { authMiddleware } from "./middlewares/authMiddleware";
 
@@ -53,6 +54,14 @@ if (isVercel) {
 }
 app.use(cors({ credentials: true, origin: true }));
 app.use(cookieParser());
+
+// Stripe webhooks require the raw body for signature verification.
+app.post(
+  "/api/billing/webhook",
+  express.raw({ type: "application/json" }),
+  stripeWebhookHandler,
+);
+
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 app.use(authMiddleware);

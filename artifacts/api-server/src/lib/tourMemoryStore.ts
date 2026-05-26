@@ -55,6 +55,8 @@ export interface MemTour {
   frozen: boolean;
   /** Tier at the time the tour was created — used to render the upgrade CTA. */
   createdOnTier: "free" | "pro" | "unlimited";
+  /** User paid $29 or has a paid plan — generate every room. */
+  fullHouseUnlocked: boolean;
   /** One scene per room (filled after Gemini classification). */
   scenes: MemScene[];
   /** Original listing/upload URLs used to start generation (persisted for serverless resume). */
@@ -272,12 +274,28 @@ export function unfreezeAllToursForUser(userId: string): number {
   let count = 0;
   for (const tour of TOURS.values()) {
     if (tour.userId !== userId) continue;
-    if (tour.frozen || tour.expiresAt !== null) {
+    if (tour.frozen || tour.expiresAt !== null || !tour.fullHouseUnlocked) {
       tour.frozen = false;
       tour.expiresAt = null;
+      tour.fullHouseUnlocked = true;
       tour.updatedAt = Date.now();
       count += 1;
     }
   }
   return count;
+}
+
+/** After $29 unlock or subscription — allow full-house generation and remove view expiry. */
+export function unlockTourFullHouse(tourId: string): MemTour | undefined {
+  const tour = TOURS.get(tourId);
+  if (!tour) return undefined;
+  tour.fullHouseUnlocked = true;
+  tour.frozen = false;
+  tour.expiresAt = null;
+  tour.updatedAt = Date.now();
+  return tour;
+}
+
+export function countLockedScenes(tour: MemTour): number {
+  return tour.scenes.filter((s) => s.locked && s.generationStatus !== "completed").length;
 }

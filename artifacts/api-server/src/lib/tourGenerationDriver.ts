@@ -13,7 +13,10 @@ import {
 } from "./tourScenesPersistence";
 import { logger } from "./logger";
 import { runFullTourPipeline } from "./tourPipeline";
-import { runPanoramaGeneration } from "./panoramaPipeline";
+import {
+  runPanoramaGeneration,
+  runPanoramaGenerationForLockedRooms,
+} from "./panoramaPipeline";
 import type { SceneGroup } from "../services/imageClassifier/grouping";
 import type { RoomType } from "../services/imageClassifier/gemini";
 
@@ -35,7 +38,7 @@ function sourceUrlsFromScenes(
   return out;
 }
 
-function scenesToGroups(mem: MemTour): SceneGroup[] {
+export function scenesToGroupsFromMem(mem: MemTour): SceneGroup[] {
   return mem.scenes.map((s) => ({
     id: s.id,
     label: s.label,
@@ -98,9 +101,11 @@ export async function hydrateMemTourFromDb(
     imageCount: tour.photosUsed ?? sourceImageUrls.length,
     viewCount: tour.viewCount,
     completedAt: tour.processingCompletedAt?.getTime() ?? null,
-    expiresAt: null,
-    frozen: false,
-    createdOnTier: "unlimited",
+    expiresAt: tour.expiresAt?.getTime() ?? null,
+    frozen: tour.frozen ?? false,
+    createdOnTier:
+      (tour.createdOnTier as MemTour["createdOnTier"]) ?? "free",
+    fullHouseUnlocked: tour.fullHouseUnlocked ?? false,
     scenes,
     sourceImageUrls,
     roomsDetected: tour.roomsDetected ?? scenes.length,
@@ -125,7 +130,22 @@ export async function advanceTourGeneration(
 ): Promise<void> {
   const mem = (await hydrateMemTourFromDb(tourId, userId)) ?? getMemTour(tourId);
   if (!mem || mem.userId !== userId) return;
-  if (mem.generationStatus === "completed" || mem.generationStatus === "failed") {
+  const lockedPending = mem.scenes.some(
+    (s) => s.locked && s.generationStatus !== "completed",
+  );
+
+  if (mem.generationStatus === "failed") {
+    return;
+  }
+
+  if (mem.generationStatus === "completed") {
+    if (lockedPending && mem.fullHouseUnlocked) {
+      await runPanoramaGenerationForLockedRooms(
+        tourId,
+        scenesToGroupsFromMem(mem),
+        reqLog,
+      );
+    }
     return;
   }
 
@@ -141,13 +161,37 @@ export async function advanceTourGeneration(
     return;
   }
 
-  const needsPanorama = mem.scenes.some(
-    (s) => s.generationStatus !== "completed",
+  const unlockedIncomplete = mem.scenes.some(
+    (s) => !s.locked && s.generationStatus !== "completed",
   );
-  if (needsPanorama) {
-    const groups = scenesToGroups(mem);
+
+  if (unlockedIncomplete) {
+    const groups = scenesToGroupsFromMem(mem);
     await runPanoramaGeneration(tourId, groups, reqLog);
+    return;
   }
+
+  if (lockedPending && mem.fullHouseUnlocked) {
+    await runPanoramaGenerationForLockedRooms(
+      tourId,
+      scenesToGroupsFromMem(mem),
+      reqLog,
+    );
+  }
+}
+
+export async function resumeFullHouseGeneration(
+  tourId: string,
+  userId: string,
+  reqLog: ReqLog,
+): Promise<void> {
+  const mem = (await hydrateMemTourFromDb(tourId, userId)) ?? getMemTour(tourId);
+  if (!mem || mem.userId !== userId || !mem.fullHouseUnlocked) return;
+  await runPanoramaGenerationForLockedRooms(
+    tourId,
+    scenesToGroupsFromMem(mem),
+    reqLog,
+  );
 }
 
 export async function saveTourSourceImages(

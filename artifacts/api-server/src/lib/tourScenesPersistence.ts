@@ -139,6 +139,10 @@ async function persistTourGenerationScenesToDb(tour: MemTour): Promise<void> {
         roomsDetected: tour.roomsDetected,
         roomsReady: tour.roomsReady,
         panoramaStatus: tour.panoramaStatus,
+        isFullHouse: tour.fullHouseUnlocked,
+        fullHouseUnlocked: tour.fullHouseUnlocked,
+        frozen: tour.frozen,
+        expiresAt: tour.expiresAt ? new Date(tour.expiresAt) : null,
         status:
           tour.generationStatus === "completed"
             ? "ready"

@@ -23,6 +23,7 @@ import { getApiUrl } from "@/lib/runtime-api";
 import { getTourPageUrl } from "@/lib/tour-url";
 import { filterListingImageUrls } from "@/lib/listing-image-filter";
 import { compressDataUrlForUpload } from "@/lib/compress-image";
+import UnlockFullHouseCard from "@/components/billing/UnlockFullHouseCard";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -87,6 +88,8 @@ export default function NewTour() {
   const [pipelineStage, setPipelineStage] = useState(1);
   const [roomsTotal, setRoomsTotal] = useState(0);
   const [roomsReady, setRoomsReady] = useState(0);
+  const [lockedRoomsCount, setLockedRoomsCount] = useState(0);
+  const [requiresUpgrade, setRequiresUpgrade] = useState(false);
   const [scenes, setScenes] = useState<
     Array<{
       id: string;
@@ -397,7 +400,10 @@ export default function NewTour() {
         imageCount: number;
         generationStatus: GenStatus;
         generatedTourUrl: string | null;
+        locked?: boolean;
       }>;
+      lockedRoomsCount?: number;
+      requiresUpgrade?: boolean;
     };
     if (extendedStatus.pipelineStage) {
       setPipelineStage(extendedStatus.pipelineStage);
@@ -427,6 +433,12 @@ export default function NewTour() {
     });
     if (extendedStatus.scenes) {
       setScenes(extendedStatus.scenes);
+    }
+    if (extendedStatus.lockedRoomsCount != null) {
+      setLockedRoomsCount(extendedStatus.lockedRoomsCount);
+    }
+    if (extendedStatus.requiresUpgrade != null) {
+      setRequiresUpgrade(extendedStatus.requiresUpgrade);
     }
     if (gs === "completed") setStep(3);
     if (gs === "failed") setStep(4);
@@ -945,9 +957,25 @@ export default function NewTour() {
               <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
                 <CheckCircle2 className="w-8 h-8 text-primary" />
               </div>
-              <h2 className="text-3xl font-display font-bold mb-1">Tour Ready!</h2>
-              <p className="text-muted-foreground text-sm">Your virtual tour is ready</p>
+              <h2 className="text-3xl font-display font-bold mb-1">
+                {requiresUpgrade ? "Preview ready!" : "Tour ready!"}
+              </h2>
+              <p className="text-muted-foreground text-sm">
+                {requiresUpgrade
+                  ? "One room is live — unlock the rest of the house for $29"
+                  : "Your virtual tour is ready"}
+              </p>
             </div>
+
+            {requiresUpgrade && result?.tourId ? (
+              <div className="px-6 pb-2">
+                <UnlockFullHouseCard
+                  tourId={result.tourId}
+                  lockedRoomsCount={lockedRoomsCount}
+                  roomsDetected={result.roomsDetected ?? undefined}
+                />
+              </div>
+            ) : null}
 
             <div className="p-6 grid sm:grid-cols-2 gap-6">
               {/* Preview */}

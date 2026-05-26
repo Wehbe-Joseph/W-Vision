@@ -47,6 +47,11 @@ In [Vercel](https://vercel.com) → your project → **Settings** → **Environm
 | `GEMINI_API_KEY` | Yes (for room classification) |
 | `PUBLIC_API_BASE_URL` | Optional — auto-set from `VERCEL_PROJECT_PRODUCTION_URL` when unset |
 | `TOURVISION_PUBLIC_URL` | Optional — same as your Vercel URL (panorama links in emails) |
+| `STRIPE_SECRET_KEY` | Yes (for $29 full-house unlock Checkout) |
+| `STRIPE_WEBHOOK_SECRET` | Yes — endpoint `https://YOUR_APP.vercel.app/api/billing/webhook` |
+| `STRIPE_PRICE_FULL_HOUSE_UNLOCK` | Optional — Stripe Price ID; omit to use inline $29 price |
+
+Run `lib/db/supabase-migration-billing.sql` in Supabase after deploy so `tours` has `expires_at`, `frozen`, `created_on_tier`, `full_house_unlocked`.
 
 `VITE_API_BASE_URL` must be **empty or unset** when API runs on the same Vercel domain. **Never** set it to `localhost` or Railway in production.
 

@@ -176,7 +176,8 @@ router.post("/tours/create", async (req, res) => {
     completedAt: null,
     expiresAt: null,
     frozen: false,
-    createdOnTier: "unlimited",
+    createdOnTier: "free",
+    fullHouseUnlocked: false,
     scenes: [],
     pipelineStage: 1,
   });

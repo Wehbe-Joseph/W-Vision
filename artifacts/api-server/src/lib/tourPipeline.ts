@@ -19,6 +19,7 @@ import { notifyAgentTourReady } from "./tourNotify";
 import { queuePersistTourScenes } from "./tourScenesPersistence";
 import { logger } from "./logger";
 import { filterListingImageUrls } from "./listingImageFilter";
+import { shouldLimitToOneRoom } from "./tourBilling";
 
 export type PipelineStage = 1 | 2 | 3 | 4;
 
@@ -79,8 +80,9 @@ async function setTourStage(
 
 function buildMemScenesFromGroups(
   groups: ReturnType<typeof groupClassificationsIntoScenes>,
+  lockAfterFirst: boolean,
 ): MemScene[] {
-  return groups.map((g) => ({
+  return groups.map((g, index) => ({
     id: g.id,
     label: g.label,
     roomType: g.roomType,
@@ -91,7 +93,7 @@ function buildMemScenesFromGroups(
     generationStatus: "queued" as MemGenerationStatus,
     generatedTourUrl: null,
     errorMessage: null,
-    locked: false,
+    locked: lockAfterFirst && index > 0,
   }));
 }
 
@@ -159,13 +161,17 @@ export async function runFullTourPipeline(opts: {
     reqLog.warn({ err, tourId }, "tour_photos save failed — continuing in memory");
   }
 
-  mem.scenes = buildMemScenesFromGroups(groups);
+  const lockAfterFirst = mem ? shouldLimitToOneRoom(mem) : false;
+  mem.scenes = buildMemScenesFromGroups(groups, lockAfterFirst);
   mem.roomsDetected = groups.length;
   mem.previewImageUrl = groups[0]?.thumbnailUrl ?? null;
   mem.generationStatus = "processing";
   queuePersistTourScenes(tourId);
 
-  await setTourStage(tourId, 3, "Generating panoramas…", {
+  const panoramaStage = lockAfterFirst
+    ? "Generating your free preview room…"
+    : "Generating panoramas…";
+  await setTourStage(tourId, 3, panoramaStage, {
     roomsDetected: groups.length,
     roomsReady: 0,
     panoramaStatus: "processing",

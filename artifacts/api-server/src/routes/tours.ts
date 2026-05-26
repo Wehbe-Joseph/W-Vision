@@ -821,11 +821,15 @@ router.get("/tours/public/:shareToken", async (req, res) => {
     ).toLowerCase();
     const ownerHasActivePaidAccess =
       ownerTier !== "free" && ownerSubscriptionStatus === "active";
-    const dbDerivedExpiresAt =
-      mem?.expiresAt ??
-      (!ownerHasActivePaidAccess
-        ? tour.createdAt.getTime() + FREE_TIER_TTL_MS
-        : null);
+    const fullHouseUnlocked =
+      mem?.fullHouseUnlocked ?? tour.fullHouseUnlocked ?? ownerHasActivePaidAccess;
+    const dbDerivedExpiresAt = fullHouseUnlocked
+      ? null
+      : (mem?.expiresAt ??
+        tour.expiresAt?.getTime() ??
+        (!ownerHasActivePaidAccess
+          ? tour.createdAt.getTime() + FREE_TIER_TTL_MS
+          : null));
     const frozen =
       mem?.frozen ??
       (dbDerivedExpiresAt !== null ? now >= dbDerivedExpiresAt : false);
@@ -889,6 +893,7 @@ router.get("/tours/public/:shareToken", async (req, res) => {
       listingBathrooms: tour.listingBathrooms,
       listingSqft: tour.listingSqft,
       isFullHouse: tour.isFullHouse ?? false,
+      fullHouseUnlocked,
       panoramaStatus: tour.panoramaStatus ?? "pending",
       roomsReady: tour.roomsReady ?? 0,
       tourType: tour.tourType ?? "panorama",

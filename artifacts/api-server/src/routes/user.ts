@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { profilesTable, onboardingAnswersTable } from "@workspace/db";
+import { profilesTable, onboardingAnswersTable, toursTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import {
   UpdateUserProfileBody,
@@ -11,7 +11,10 @@ import {
   memTotalToursForUser,
   unfreezeAllToursForUser,
   getMemTour,
+  unlockTourFullHouse,
 } from "../lib/tourMemoryStore";
+import { resumeFullHouseGeneration } from "../lib/tourGenerationDriver";
+import { isPaidSubscriptionTier } from "../lib/tourBilling";
 import {
   getMemUser,
   setMemUserTier,
@@ -265,20 +268,39 @@ router.post("/subscribe", async (req, res) => {
   }
   setMemUserTier(userId, tier);
 
-  // Unfreeze every tour the user owns when they switch to a paid plan.
-  const unfrozen = tier === "free" ? 0 : unfreezeAllToursForUser(userId);
+  const paid = isPaidSubscriptionTier(tier);
+  const unfrozen = paid ? unfreezeAllToursForUser(userId) : 0;
 
-  // If the caller hinted at the tour they just upgraded from, surface how
-  // many locked rooms can now be resumed. The actual dispatch happens via
-  // POST /generate-tour/:tourId/resume which the frontend calls right after
-  // this responds.
+  if (paid) {
+    try {
+      await db
+        .update(toursTable)
+        .set({
+          fullHouseUnlocked: true,
+          frozen: false,
+          expiresAt: null,
+        })
+        .where(eq(toursTable.userId, userId));
+    } catch (err) {
+      req.log.warn({ err, userId }, "Could not unlock tours in DB on subscribe");
+    }
+  }
+
   const tourId =
     typeof req.body?.tourId === "string" ? (req.body.tourId as string) : null;
   let lockedRoomsForTour = 0;
-  if (tourId) {
+  if (tourId && paid) {
+    unlockTourFullHouse(tourId);
     const mem = getMemTour(tourId);
     if (mem && mem.userId === userId) {
-      lockedRoomsForTour = mem.scenes.filter((s) => s.locked).length;
+      lockedRoomsForTour = mem.scenes.filter(
+        (s) => s.locked && s.generationStatus !== "completed",
+      ).length;
+      if (lockedRoomsForTour > 0) {
+        void resumeFullHouseGeneration(tourId, userId, req.log).catch((err) => {
+          req.log.warn({ err, tourId }, "Auto-resume after subscribe failed");
+        });
+      }
     }
   }
 
