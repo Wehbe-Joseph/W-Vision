@@ -24,14 +24,6 @@
       }
     }
   ],
-  "redirects": [
-    {
-      "source": "/:path*",
-      "has": [{ "type": "host", "value": "www.getwvision.com" }],
-      "destination": "https://getwvision.com/:path*",
-      "permanent": true
-    }
-  ],
   "routes": [
     { "src": "/api/(.*)", "dest": "/api/index.js" },
     { "handle": "filesystem" },
