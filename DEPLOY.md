@@ -77,7 +77,9 @@ Google Cloud Console → **APIs & Services** → **Credentials** → your OAuth 
 - **Authorized JavaScript origins**: `https://getwvision.com`, `https://www.getwvision.com`
 - **Authorized redirect URIs**: only Supabase’s callback, e.g. `https://YOUR_PROJECT_REF.supabase.co/auth/v1/callback` (not your app domain)
 
-The app sends users to `/auth/callback` after Supabase finishes; that path must be listed above.
+The app redirects `www.getwvision.com` → `getwvision.com` for consistency, **except** during OAuth return (`/auth/callback` or `?code=` / `?error=`) so PKCE storage stays on the same origin.
+
+**PKCE / Google sign-in:** If you see “PKCE code verifier not found”, it was usually caused by redirecting `www` → apex while the OAuth `?code=` was in the URL (verifier stayed on `www`). That redirect is now skipped for `/auth/callback` and any URL with `code=` or `error=`. You can still use either `https://getwvision.com` or `https://www.getwvision.com` as long as both redirect URLs are allow-listed in Supabase.
 
 ---
 

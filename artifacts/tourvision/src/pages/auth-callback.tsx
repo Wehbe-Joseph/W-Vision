@@ -35,11 +35,15 @@ export default function AuthCallback() {
         if (code) {
           const { error } = await supabase.auth.exchangeCodeForSession(code);
           if (error) {
-            setLocation(`/login?error=${encodeURIComponent(error.message)}`);
+            const hint =
+              /pkce|code verifier/i.test(error.message)
+                ? " Use the same site URL you started from (www vs non-www), or sign in again."
+                : "";
+            setLocation(
+              `/login?error=${encodeURIComponent(error.message + hint)}`,
+            );
             return;
           }
-        } else {
-          await supabase.auth.getSession();
         }
 
         const {
