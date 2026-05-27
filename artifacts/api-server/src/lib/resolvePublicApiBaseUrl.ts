@@ -1,5 +1,5 @@
 /** Production custom domain — fallback when env vars are unset on Vercel. */
-export const PRODUCTION_SITE_URL = "https://getwvision.com";
+export const PRODUCTION_SITE_URL = "https://www.getwvision.com";
 
 function isLocalhostUrl(value: string): boolean {
   return /localhost|127\.0\.0\.1|:8080\b|:18992\b/i.test(value);

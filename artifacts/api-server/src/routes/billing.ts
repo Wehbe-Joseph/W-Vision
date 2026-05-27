@@ -25,7 +25,7 @@ function siteOrigin(): string {
   if (!/localhost|127\.0\.0\.1/i.test(resolved)) {
     return resolved;
   }
-  return "https://getwvision.com";
+  return "https://www.getwvision.com";
 }
 
 router.get("/billing/config", (_req, res) => {

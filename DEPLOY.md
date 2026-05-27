@@ -34,7 +34,7 @@ In [Vercel](https://vercel.com) → your project → **Settings** → **Environm
 |----------|--------|
 | `VITE_SUPABASE_URL` | Supabase project settings |
 | `VITE_SUPABASE_ANON_KEY` | Supabase project settings |
-| `VITE_SITE_URL` | `https://getwvision.com` (required for Google OAuth) |
+| `VITE_SITE_URL` | `https://www.getwvision.com` (optional; browser uses current origin) |
 
 **API (runtime — serverless function):**
 
@@ -47,7 +47,7 @@ In [Vercel](https://vercel.com) → your project → **Settings** → **Environm
 | `APIFY_TOKEN` | Yes (for listing scrape) |
 | `GEMINI_API_KEY` | Yes (for room classification) |
 | `PUBLIC_API_BASE_URL` | Optional — auto-set from `VERCEL_PROJECT_PRODUCTION_URL` when unset |
-| `TOURVISION_PUBLIC_URL` | Optional — same as your Vercel URL (panorama links in emails) |
+| `TOURVISION_PUBLIC_URL` | `https://www.getwvision.com` (panorama + email links) |
 | `STRIPE_SECRET_KEY` | Yes (for $29 full-house unlock Checkout) |
 | `STRIPE_WEBHOOK_SECRET` | Yes — endpoint `https://YOUR_APP.vercel.app/api/billing/webhook` |
 | `STRIPE_PRICE_FULL_HOUSE_UNLOCK` | Optional — Stripe Price ID; omit to use inline $29 price |
@@ -64,32 +64,41 @@ Apply variables to **Production**, **Preview**, and **Development**, then **Rede
 
 Supabase → **Authentication** → **URL Configuration**:
 
-- **Site URL**: `https://getwvision.com`
+- **Site URL**: `https://www.getwvision.com` (Vercel redirects `getwvision.com` → `www` — do **not** add a client-side redirect in the opposite direction or the site will reload in a loop)
 - **Redirect URLs** (add every host you use):
-  - `https://getwvision.com/**`
   - `https://www.getwvision.com/**`
-  - `https://getwvision.com/auth/callback`
+  - `https://getwvision.com/**`
   - `https://www.getwvision.com/auth/callback`
+  - `https://getwvision.com/auth/callback`
   - `https://*.vercel.app/**` (preview deploys)
 
-Google Cloud Console → **APIs & Services** → **Credentials** → your OAuth client:
+Google Cloud Console → **APIs & Services** → **Credentials** → your OAuth client (Web application):
 
-- **Authorized JavaScript origins**: `https://getwvision.com`, `https://www.getwvision.com`
-- **Authorized redirect URIs**: only Supabase’s callback, e.g. `https://YOUR_PROJECT_REF.supabase.co/auth/v1/callback` (not your app domain)
+- **Authorized JavaScript origins** (optional but recommended):
+  - `https://www.getwvision.com`
+  - `https://getwvision.com`
+  - `https://YOUR_PROJECT_REF.supabase.co`
+- **Authorized redirect URIs** — **only** Supabase’s callback (copy from Supabase → Auth → Providers → Google):
+  - `https://YOUR_PROJECT_REF.supabase.co/auth/v1/callback`
+  - Do **not** put `https://getwvision.com/auth/callback` here — Google never redirects to your app directly.
 
-The app redirects `www.getwvision.com` → `getwvision.com` for consistency, **except** during OAuth return (`/auth/callback` or `?code=` / `?error=`) so PKCE storage stays on the same origin.
+Supabase → **Authentication** → **Providers** → **Google**: paste the **same** Client ID and Client Secret from that Google OAuth client. Enable the provider.
 
-**PKCE / Google sign-in:** If you see “PKCE code verifier not found”, it was usually caused by redirecting `www` → apex while the OAuth `?code=` was in the URL (verifier stayed on `www`). That redirect is now skipped for `/auth/callback` and any URL with `code=` or `error=`. You can still use either `https://getwvision.com` or `https://www.getwvision.com` as long as both redirect URLs are allow-listed in Supabase.
+**Error 400: redirect_uri_mismatch** (Google screen): the redirect URI above is missing or wrong in Google Cloud, or Supabase is using a different Client ID than the one you edited. Fix Google first, then re-save credentials in Supabase.
+
+The app does **not** redirect between `www` and apex — Vercel already sends apex → `www`. Never add the opposite redirect in app code.
+
+**PKCE / Google sign-in:** Stay on one host for the whole flow (`www.getwvision.com` after Vercel’s redirect). Both apex and www are fine if listed in Supabase redirect URLs.
 
 ---
 
 ## 3. Verify after deploy
 
 ```bash
-curl https://getwvision.com/api/healthz
+curl https://www.getwvision.com/api/healthz
 # {"status":"ok"}
 
-curl https://getwvision.com/api/healthz/integrations
+curl https://www.getwvision.com/api/healthz/integrations
 # {"status":"ok","integrations":{"apify":{"configured":true},...}}
 ```
 
