@@ -61,6 +61,7 @@ export default function PannellumViewer({
   const containerRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [showImageFallback, setShowImageFallback] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
 
   const activeSceneId =
@@ -94,6 +95,7 @@ export default function PannellumViewer({
     let link: HTMLLinkElement | null = null;
     let script: HTMLScriptElement | null = null;
     let cancelled = false;
+    let viewerSettled = false;
 
     function buildScenes(roomList: Room[]) {
       const scenes: Record<string, unknown> = {};
@@ -112,6 +114,7 @@ export default function PannellumViewer({
 
       try {
         setLoadError(null);
+        setShowImageFallback(false);
         const scenes = buildScenes(orderedRooms);
         const firstSceneId = orderedRooms[0]!.sceneId;
 
@@ -135,8 +138,23 @@ export default function PannellumViewer({
           onActiveSceneIdChange?.(sceneId);
         });
 
+        // Some invalid/non-equirectangular images never throw but also never render.
+        // If the viewer still hasn't loaded after a while, surface a fallback.
         window.setTimeout(() => {
-          if (!cancelled) setIsLoading(false);
+          if (!cancelled && !viewerSettled) {
+            setLoadError(
+              "Could not render this panorama in 360 mode. Showing image fallback.",
+            );
+            setShowImageFallback(true);
+            setIsLoading(false);
+          }
+        }, 7000);
+
+        window.setTimeout(() => {
+          if (!cancelled) {
+            viewerSettled = true;
+            setIsLoading(false);
+          }
         }, 1200);
       } catch (err) {
         if (!cancelled) {
@@ -202,7 +220,25 @@ export default function PannellumViewer({
             textAlign: "center",
           }}
         >
-          <p style={{ fontSize: 14 }}>{loadError}</p>
+          <div>
+            <p style={{ fontSize: 14 }}>{loadError}</p>
+            {currentRoom?.panoramaUrl ? (
+              <a
+                href={currentRoom.panoramaUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: "inline-block",
+                  marginTop: 12,
+                  color: "#93c5fd",
+                  fontSize: 13,
+                  textDecoration: "underline",
+                }}
+              >
+                Open panorama image
+              </a>
+            ) : null}
+          </div>
         </div>
       )}
 
@@ -235,7 +271,15 @@ export default function PannellumViewer({
         </div>
       )}
 
-      <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
+      {showImageFallback && currentRoom?.panoramaUrl ? (
+        <img
+          src={currentRoom.panoramaUrl}
+          alt={currentRoom.roomType}
+          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+        />
+      ) : (
+        <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
+      )}
 
       {!isLoading && !hideBottomNav && orderedRooms.length > 1 && (
         <div className="absolute bottom-0 left-0 right-0 z-20 p-3 pb-5 bg-gradient-to-t from-black/90 via-black/50 to-transparent pointer-events-auto">

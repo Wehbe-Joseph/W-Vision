@@ -27,9 +27,9 @@ function getOpenAI(): OpenAI {
 function panoramaOutputSize(): string {
   const custom = process.env.PANORAMA_IMAGE_SIZE?.trim();
   if (custom) return custom;
-  const model = process.env.OPENAI_IMAGE_MODEL?.trim() || "gpt-image-1";
-  if (model.startsWith("gpt-image-2")) return "2048x1024";
-  return "1536x1024";
+  // Pannellum expects equirectangular panoramas with a 2:1 ratio.
+  // Always request 2048x1024 to avoid blank/black viewers on non-2:1 outputs.
+  return "2048x1024";
 }
 
 /**
