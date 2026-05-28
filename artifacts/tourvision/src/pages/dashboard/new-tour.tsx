@@ -1022,23 +1022,27 @@ export default function NewTour() {
                   Copy Share Link <Copy className="w-4 h-4" />
                 </Button>
 
-                <Button
-                  asChild
-                  className="w-full justify-between bg-primary text-primary-foreground font-bold"
-                  disabled={!result.shareToken}
-                >
-                  <a
-                    href={
-                      result.shareToken
-                        ? getTourPageUrl(result.shareToken)
-                        : undefined
-                    }
-                    target="_blank"
-                    rel="noopener noreferrer"
+                {result.shareToken ? (
+                  <Button
+                    asChild
+                    className="w-full justify-between bg-primary text-primary-foreground font-bold"
+                  >
+                    <a
+                      href={getTourPageUrl(result.shareToken)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Open 3D Tour <ExternalLink className="w-4 h-4" />
+                    </a>
+                  </Button>
+                ) : (
+                  <Button
+                    className="w-full justify-between bg-primary text-primary-foreground font-bold"
+                    disabled
                   >
                     Open 3D Tour <ExternalLink className="w-4 h-4" />
-                  </a>
-                </Button>
+                  </Button>
+                )}
 
                 <Button
                   variant="ghost"
