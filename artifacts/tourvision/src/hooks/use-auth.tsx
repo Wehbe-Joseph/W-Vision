@@ -139,11 +139,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!supabase) {
       throw new Error(supabaseEnvError ?? "Supabase is not configured.");
     }
+    // Ensure we don't keep an old local session when switching Google account.
+    await supabase.auth.signOut({ scope: "local" });
     const redirectTo = getAuthCallbackUrl();
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
         redirectTo,
+        queryParams: { prompt: "select_account" },
         skipBrowserRedirect: false,
       },
     });

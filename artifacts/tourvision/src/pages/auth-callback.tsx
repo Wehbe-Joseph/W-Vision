@@ -46,9 +46,12 @@ export default function AuthCallback() {
           }
         }
 
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
+        // Session write can be slightly delayed on some browsers.
+        let session = (await supabase.auth.getSession()).data.session;
+        if (!session) {
+          const refreshed = await supabase.auth.refreshSession();
+          session = refreshed.data.session;
+        }
 
         if (!session) {
           setMessage("Could not complete sign in. Redirecting…");
