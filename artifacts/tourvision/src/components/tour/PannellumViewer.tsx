@@ -25,6 +25,16 @@ interface Room {
   floorNumber: number;
 }
 
+function inspectImageSize(url: string): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    img.onerror = () => reject(new Error("Could not load panorama image"));
+    img.src = url;
+  });
+}
+
 interface PannellumViewerProps {
   rooms: Room[];
   /** @deprecated Tier restrictions disabled — always full house */
@@ -172,12 +182,52 @@ export default function PannellumViewer({
     document.head.appendChild(link);
 
     if (window.pannellum) {
-      initViewer();
+      void (async () => {
+        try {
+          const first = orderedRooms[0];
+          if (first?.panoramaUrl) {
+            const { width, height } = await inspectImageSize(first.panoramaUrl);
+            const ratio = width / Math.max(1, height);
+            if (ratio < 1.95 || ratio > 2.05) {
+              setLoadError(
+                `Panorama aspect ratio is ${width}x${height} (expected 2:1). Showing image fallback.`,
+              );
+              setShowImageFallback(true);
+              setIsLoading(false);
+              return;
+            }
+          }
+        } catch {
+          // Continue and let Pannellum attempt rendering.
+        }
+        initViewer();
+      })();
     } else {
       script = document.createElement("script");
       script.src = PANNELLUM_JS;
       script.async = true;
-      script.onload = () => initViewer();
+      script.onload = () => {
+        void (async () => {
+          try {
+            const first = orderedRooms[0];
+            if (first?.panoramaUrl) {
+              const { width, height } = await inspectImageSize(first.panoramaUrl);
+              const ratio = width / Math.max(1, height);
+              if (ratio < 1.95 || ratio > 2.05) {
+                setLoadError(
+                  `Panorama aspect ratio is ${width}x${height} (expected 2:1). Showing image fallback.`,
+                );
+                setShowImageFallback(true);
+                setIsLoading(false);
+                return;
+              }
+            }
+          } catch {
+            // Continue and let Pannellum attempt rendering.
+          }
+          initViewer();
+        })();
+      };
       document.head.appendChild(script);
     }
 
